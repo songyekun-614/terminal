@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'"
+    />
+    <title>terminal</title>
+    <link rel="stylesheet" href="xterm.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="window-controls">
+        <button class="traffic close" aria-label="关闭窗口">×</button
+        ><button class="traffic minimize" aria-label="最小化">−</button
+        ><button class="traffic maximize" aria-label="最大化">+</button>
+      </div>
+      <div class="heading">
+        <strong>Stay focused</strong><small>Start with a command</small>
+      </div>
+      <nav>
+        <button id="new" aria-label="新建标签页">＋</button
+        ><button id="search-open">搜索</button
+        ><button id="settings-open">设置</button
+        ><button
+          id="menu-open"
+          aria-label="更多操作"
+          aria-expanded="false"
+          popovertarget="menu"
+        >
+          ⌄
+        </button>
+      </nav>
+    </header>
+    <div id="menu" popover>
+      <button data-action="copy">复制</button
+      ><button data-action="paste">粘贴</button
+      ><button data-action="selectall">全选</button
+      ><button data-action="rename">重命名标签页</button
+      ><button data-action="search">搜索</button
+      ><button data-action="settings">设置</button
+      ><button data-action="about">关于终端</button>
+    </div>
+    <dialog id="about">
+      <h2>terminal</h2>
+      <p>Stay focused · Start with a command</p>
+      <p class="muted">跨平台终端 · Electron / xterm.js</p>
+      <form method="dialog">
+        <footer><button>关闭</button></footer>
+      </form>
+    </dialog>
+    <div id="tabs" role="tablist" aria-label="终端标签页"></div>
+    <form id="search" hidden>
+      <label>搜索内容 <input id="query" aria-label="搜索内容" /></label
+      ><button type="submit">下一个</button
+      ><button type="button" id="search-prev">上一个</button
+      ><button type="button" id="search-close" aria-label="关闭搜索">×</button>
+    </form>
+    <div id="status" role="status" aria-live="polite"></div>
+    <main id="terminals"></main>
+    <dialog id="rename">
+      <form method="dialog">
+        <h2>重命名标签页</h2>
+        <label>标签名称<input id="tab-name" maxlength="80" /></label>
+        <footer>
+          <button value="cancel">取消</button
+          ><button value="save" class="primary">重命名</button>
+        </footer>
+      </form>
+    </dialog>
+    <dialog id="settings">
+      <form id="settings-form">
+        <h2>外观设置</h2>
+        <p class="muted">实时预览 · 应用于所有标签页</p>
+        <div class="settings-group">
+          <label
+            >配色方案<select name="profile">
+              <option>Pro</option>
+              <option>Basic</option>
+              <option>Homebrew</option>
+            </select></label
+          ><label
+            >字体<input
+              name="font_family"
+              list="font-list"
+              maxlength="100" /><datalist id="font-list"></datalist></label
+          ><label
+            >字体大小<input
+              name="font_size"
+              type="number"
+              min="8"
+              max="32" /></label
+          ><label>新标签页 Shell<select name="shell"></select></label>
+        </div>
+        <div class="settings-group">
+          <label
+            >背景预设<select id="background-preset">
+              <option value="">自定义</option>
+            </select></label
+          ><label
+            >背景颜色<input
+              name="background"
+              placeholder="#17191e"
+              maxlength="7"
+              aria-describedby="settings-error" /></label
+          ><label
+            >用户名颜色预设<select id="username-preset">
+              <option value="">自定义</option>
+              <option value="#28c840">绿色</option>
+              <option value="#5b9dff">蓝色</option>
+              <option value="#2ec7c9">青色</option>
+              <option value="#f2a65a">橙色</option>
+              <option value="#e783b2">粉色</option>
+            </select></label
+          ><label
+            >用户名与主机颜色<input
+              name="username_color"
+              maxlength="7"
+              aria-describedby="settings-error" /></label
+          ><label
+            >壁纸透明度<input
+              name="wallpaper_opacity"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+          /></label>
+          <div class="wallpaper-actions">
+            <button type="button" id="wallpaper-import">导入壁纸</button
+            ><button type="button" id="wallpaper-remove">移除壁纸</button>
+          </div>
+        </div>
+        <p id="settings-error" role="alert"></p>
+        <footer>
+          <button type="button" id="settings-cancel">取消</button
+          ><button type="submit" class="primary">保存</button>
+        </footer>
+      </form>
+    </dialog>
+    <script src="app.bundle.js"></script>
+  </body>
+</html>

@@ -3,3 +3,9 @@ __pycache__/
 .runtime/
 *.deb
 *.sock
+node_modules/
+desktop/dist/
+desktop/renderer/app.bundle.js
+desktop/renderer/xterm.css
+desktop/test-results/
+desktop/playwright-report/
