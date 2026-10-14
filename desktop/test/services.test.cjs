@@ -87,7 +87,7 @@ test("platform shell arguments preserve paths and choose Windows PowerShell / cm
     ["/D", "/Q"],
   );
 });
-test("PTY runs a real shell, supports Unicode/resize, rejects invalid input and closes cleanly", async () => {
+test("PTY runs a real shell, supports Unicode/resize, rejects invalid input and closes cleanly", async (t) => {
   if (!fs.existsSync(sessionsFile))
     return assert.fail("PTY implementation missing");
   const { Sessions } = require(sessionsFile);
@@ -106,6 +106,7 @@ test("PTY runs a real shell, supports Unicode/resize, rejects invalid input and 
     },
     onExit: exited,
   });
+  let failure;
   try {
     const shell = process.platform === "win32" ? "powershell" : "bash";
     const s = sessions.create({ shell, cwd: root, cols: 80, rows: 24 });
@@ -138,9 +139,17 @@ test("PTY runs a real shell, supports Unicode/resize, rejects invalid input and 
       ),
     ]);
     assert.equal(sessions.items.size, 0);
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
     sessions.dispose();
-    fs.rmSync(root, { recursive: true, force: true });
+    try {
+      await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    } catch (error) {
+      if (!failure) throw error;
+      t.diagnostic("PTY cleanup also failed: " + error.message);
+    }
   }
 });
 test("split OSC state tracks idle/busy and directories without partial marker confusion", () => {
@@ -163,7 +172,7 @@ test("split OSC state tracks idle/busy and directories without partial marker co
 test(
   "Windows PowerShell integration preserves the original prompt function and last native exit status",
   { skip: process.platform !== "win32" },
-  () => {
+  (t) => {
     const { execFileSync } = require("node:child_process");
     const { shellProfiles } = require("../src/shells.cjs");
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-powershell-"));
@@ -175,13 +184,16 @@ test(
       for (const profile of shellProfiles().filter(
         (s) => s.id === "powershell" || s.id === "pwsh",
       )) {
+        t.diagnostic("Checking prompt with " + profile.id + " at " + profile.file);
         const script = path.join(root, "preserve.ps1");
         // Literal path is passed through the environment; no command interpolation.
         fs.writeFileSync(
           script,
-          "function global:prompt { 'CUSTOM_PROFILE_PROMPT' }\n. $env:TERMINAL_PROMPT_SCRIPT\n$global:LASTEXITCODE = 37\n$result = prompt\nif ($result -notlike '*CUSTOM_PROFILE_PROMPT*') { throw 'Custom prompt was discarded' }\nif ($global:LASTEXITCODE -ne 37) { throw 'Last exit status changed' }\n$result\n",
+          "[Console]::WriteLine('PROMPT_SCRIPT_STARTED')\nfunction global:prompt { 'CUSTOM_PROFILE_PROMPT' }\n. $env:TERMINAL_PROMPT_SCRIPT\n[Console]::WriteLine('PROMPT_SCRIPT_LOADED')\n$global:LASTEXITCODE = 37\n$result = prompt\nif ($result -notlike '*CUSTOM_PROFILE_PROMPT*') { throw 'Custom prompt was discarded' }\nif ($global:LASTEXITCODE -ne 37) { throw 'Last exit status changed' }\n$result\n",
         );
-        const output = execFileSync(
+        let output;
+        try {
+          output = execFileSync(
           profile.file,
           [
             "-NoProfile",
@@ -203,7 +215,12 @@ test(
               ),
             },
           },
-        );
+          );
+        } catch (error) {
+          t.diagnostic("PowerShell stdout: " + String(error.stdout || ""));
+          t.diagnostic("PowerShell stderr: " + String(error.stderr || ""));
+          throw error;
+        }
         assert.ok(output.includes("CUSTOM_PROFILE_PROMPT"));
         assert.ok(output.includes("[38;2;231;131;178m"));
       }
