@@ -222,27 +222,27 @@ test(
         let output;
         try {
           output = execFileSync(
-          profile.file,
-          [
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            script,
-          ],
-          {
-            encoding: "utf8",
-            timeout: 15000,
-            env: {
-              ...process.env,
-              MAC_STYLE_TERMINAL_SETTINGS: path.join(root, "settings.json"),
-              TERMINAL_PROMPT_SCRIPT: path.join(
-                __dirname,
-                "../assets/prompt.ps1",
-              ),
+            profile.file,
+            [
+              "-NoProfile",
+              "-NonInteractive",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              script,
+            ],
+            {
+              encoding: "utf8",
+              timeout: 15000,
+              env: {
+                ...process.env,
+                MAC_STYLE_TERMINAL_SETTINGS: path.join(root, "settings.json"),
+                TERMINAL_PROMPT_SCRIPT: path.join(
+                  __dirname,
+                  "../assets/prompt.ps1",
+                ),
+              },
             },
-          },
           );
         } catch (error) {
           t.diagnostic("PowerShell stdout: " + String(error.stdout || "").slice(-6000));

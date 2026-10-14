@@ -8,7 +8,15 @@ function global:prompt {
     $savedExitCode = $global:LASTEXITCODE
     $color = '#28c840'
     try {
-        $preferences = [IO.File]::ReadAllText($env:MAC_STYLE_TERMINAL_SETTINGS) | ConvertFrom-Json
+        $json = [IO.File]::ReadAllText($env:MAC_STYLE_TERMINAL_SETTINGS)
+        if ($PSVersionTable.PSEdition -eq 'Desktop') {
+            # Avoid cmdlet module auto-loading in the Windows PowerShell prompt.
+            [void][Reflection.Assembly]::Load('System.Web.Extensions, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35')
+            $parser = [System.Web.Script.Serialization.JavaScriptSerializer]::new()
+            $preferences = $parser.DeserializeObject($json)
+        } else {
+            $preferences = $json | ConvertFrom-Json
+        }
         if ($preferences.username_color -match '^#[0-9a-fA-F]{6}$') { $color = $preferences.username_color }
     } catch {}
     $r = [Convert]::ToInt32($color.Substring(1,2),16)

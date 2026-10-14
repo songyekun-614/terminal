@@ -90,10 +90,19 @@ test("Ctrl+C copies terminal selection and still interrupts without selection", 
     .toContain("selected-clipboard");
   // Pasting clears the terminal selection; the next Ctrl+C must reach the shell.
   await app.evaluate(({ clipboard }, command) => clipboard.writeText(command),
-    process.platform === "win32" ? "Start-Sleep -Seconds 30" : "sleep 30");
+    process.platform === "win32"
+      ? "Write-Output 'SLEEP_STARTED'; Start-Sleep -Seconds 30"
+      : "printf 'SLEEP_STARTED\\n'; sleep 30");
   await page.keyboard.press("Control+Shift+V");
   await page.keyboard.press("Enter");
+  await expect.poll(async () =>
+    (await page.locator(".terminal-pane.active .xterm-screen").textContent())
+      .match(/SLEEP_STARTED/g)?.length || 0).toBe(2);
   await page.keyboard.press("Control+C");
+  await expect.poll(() => page.evaluate(async () => {
+    const id = document.querySelector(".terminal-pane.active").id.slice("terminal-".length);
+    return (await window.terminalAPI.sessionInfo(id)).busy;
+  })).toBe(false);
   await page.keyboard.type(process.platform === "win32"
     ? "Write-Output ('interrupt-' + 'works')" : "printf '%s\\n' 'interrupt-'works");
   await page.keyboard.press("Enter");
