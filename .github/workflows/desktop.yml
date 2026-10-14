@@ -5,6 +5,11 @@ on:
   pull_request:
     paths: ['desktop/**', '.github/workflows/desktop.yml']
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish the package version as a GitHub Release (main only)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -88,3 +93,70 @@ jobs:
             desktop/dist/*.exe
             desktop/dist/*.zip
           if-no-files-found: error
+
+  release:
+    needs: desktop
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+       (github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: terminal-*
+          path: release-assets
+          merge-multiple: true
+      - name: Validate all installers and create checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./desktop/package.json').version")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          cd release-assets
+          for arch in x64 arm64; do
+            for ext in AppImage deb rpm; do
+              test -s "terminal-${version}-linux-${arch}.${ext}"
+            done
+            test -s "terminal-${version}-windows-${arch}-setup.exe"
+            test -s "terminal-${version}-windows-${arch}.zip"
+          done
+          sha256sum terminal-* > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Upload installers and publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./desktop/package.json').version")
+          tag="v${version}"
+          existing_tag=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${tag}" --jq ".[] | select(.ref == \"refs/tags/${tag}\") | .ref")
+          if [[ -n "$existing_tag" ]]; then
+            tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
+            [[ "$tag_sha" == "$GITHUB_SHA" ]] || { echo 'Release tag points to different source' >&2; exit 1; }
+          fi
+          cat > release-notes.md <<'NOTES'
+          Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
+
+          - 修复复制粘贴快捷键、菜单焦点与异步粘贴后的按键顺序。
+          - 修复 Windows PowerShell 启动和 ConPTY 退出清理。
+          - 四个平台均完成服务测试、界面测试和打包后回归测试。
+
+          下载与系统架构一致的文件：Windows 使用 setup.exe 或 zip；Debian / Ubuntu 使用 deb；Fedora / openSUSE 使用 rpm；其他 Linux 桌面可使用 AppImage。
+          安装步骤见仓库 README。安装包无需 Node.js 或 Python。Windows 安装包未签名；macOS 暂无安装包。
+          SHA256SUMS 提供安装包校验值。
+          NOTES
+          printf '\n源码提交：%s\n构建记录：https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
+          if gh release view "$tag" --json isDraft,targetCommitish > existing-release.json 2>/dev/null; then
+            node -e "const r=require('./existing-release.json'); if (!r.isDraft || r.targetCommitish !== process.env.GITHUB_SHA) throw Error('Refusing to replace an existing release');"
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --draft --title "terminal ${version}" --notes-file release-notes.md
+          fi
+          gh release upload "$tag" release-assets/* --clobber
+          gh release edit "$tag" --draft=false --latest
