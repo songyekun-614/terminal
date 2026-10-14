@@ -1,6 +1,10 @@
 # Loaded after PowerShell's regular profiles. Never edits the user's profile.
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
+if ($PSVersionTable.PSEdition -eq 'Desktop') {
+    # Find this PowerShell's built-in modules before inherited module directories.
+    $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules') + ';' + $env:PSModulePath
+}
 $global:TerminalOriginalPrompt = $function:prompt
 function global:prompt {
     # Invoke the original prompt first so its content, hooks and side effects survive.
