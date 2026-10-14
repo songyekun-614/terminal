@@ -401,7 +401,19 @@ test("renderer isolation and reload dispose prior PTYs", async () => {
           return error.code === "ESRCH";
         }
       })
-      .toBe(true);
+      .toBe(true)
+      .catch((error) => {
+        // Preserve evidence before afterEach closes Electron and reaps children.
+        for (const file of ["stat", "cmdline", "wchan"]) {
+          try {
+            console.error(`Reload PTY ${old.pid} ${file}:`,
+              fs.readFileSync(`/proc/${old.pid}/${file}`, "utf8"));
+          } catch (readError) {
+            console.error(`Reload PTY ${old.pid} ${file}:`, readError.code);
+          }
+        }
+        throw error;
+      });
   await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
   await page.keyboard.type(
     process.platform === "win32"

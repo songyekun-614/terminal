@@ -118,10 +118,10 @@ jobs:
           version=$(node -p "require('./desktop/package.json').version")
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           cd release-assets
+          for file in "terminal-${version}-linux-x86_64.AppImage" "terminal-${version}-linux-amd64.deb" "terminal-${version}-linux-x86_64.rpm" "terminal-${version}-linux-arm64.AppImage" "terminal-${version}-linux-arm64.deb" "terminal-${version}-linux-aarch64.rpm"; do
+            test -s "$file"
+          done
           for arch in x64 arm64; do
-            for ext in AppImage deb rpm; do
-              test -s "terminal-${version}-linux-${arch}.${ext}"
-            done
             test -s "terminal-${version}-windows-${arch}-setup.exe"
             test -s "terminal-${version}-windows-${arch}.zip"
           done
