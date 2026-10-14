@@ -114,6 +114,14 @@ test("PTY runs a real shell, supports Unicode/resize, rejects invalid input and 
     assert.equal(s.cwd, root);
     assert.throws(() => sessions.write("foreign", "x"));
     assert.throws(() => sessions.resize(s.id, 0, 24));
+    // A spawned PID is not a ready prompt: PowerShell may still initialize
+    // its console input. Wait for the shell integration's first idle marker.
+    const readyUntil = Date.now() + 15000;
+    while (sessions.info(s.id).busy) {
+      if (Date.now() > readyUntil)
+        assert.fail("PTY prompt did not become ready: " + output.slice(-1500));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     sessions.resize(s.id, 93, 31);
     const command =
       process.platform === "win32"
