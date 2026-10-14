@@ -1,0 +1,90 @@
+name: Desktop native builds
+on:
+  push:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: linux
+            arch: x64
+            appDir: linux-unpacked
+            audioPackage: libasound2
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+            appDir: linux-arm64-unpacked
+            audioPackage: libasound2t64
+          - runner: windows-2022
+            platform: win
+            arch: x64
+            appDir: win-unpacked
+          - runner: windows-11-arm
+            platform: win
+            arch: arm64
+            appDir: win-arm64-unpacked
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: desktop
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          architecture: ${{ matrix.arch }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Linux build and display dependencies
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 rpm xvfb libgtk-3-0 libnss3 libgbm1 ${{ matrix.audioPackage }}
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Test services against stock Node before Electron rebuild
+        timeout-minutes: 3
+        run: npm test
+      - name: Build renderer and rebuild native PTY for Electron
+        run: npm run build && npx electron-builder install-app-deps --arch=${{ matrix.arch }}
+      - name: Linux real PTY and Electron smoke
+        if: matrix.platform == 'linux'
+        run: xvfb-run -a npm run test:e2e
+      - name: Windows real ConPTY and Electron smoke
+        if: matrix.platform == 'win'
+        run: npm run test:e2e
+      - name: Package matching native architecture
+        run: npm run dist:${{ matrix.platform }} -- --${{ matrix.arch }}
+      - name: Linux packaged application regression tests
+        if: matrix.platform == 'linux'
+        env:
+          TERMINAL_TEST_EXECUTABLE: ${{ github.workspace }}/desktop/dist/${{ matrix.appDir }}/terminal
+        run: xvfb-run -a npm run test:e2e
+      - name: Windows packaged application regression tests
+        if: matrix.platform == 'win'
+        env:
+          TERMINAL_TEST_EXECUTABLE: ${{ github.workspace }}/desktop/dist/${{ matrix.appDir }}/terminal.exe
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terminal-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+            desktop/dist/*.rpm
+            desktop/dist/*.exe
+            desktop/dist/*.zip
+          if-no-files-found: error

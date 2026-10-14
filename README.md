@@ -1,6 +1,27 @@
 # terminal
 
-一款供 Debian 13 使用的独立终端。界面参考 Mac 自带终端的简洁布局，终端内核使用 GNOME VTE，因此运行的是真实 shell，而非模拟输入框。
+一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。SSH 暂停开发。
+
+## 默认独立版本
+
+下载与系统架构一致的安装包：Windows 提供用户级 NSIS 安装器和 zip；Linux 提供 AppImage、deb 和 rpm。安装、卸载、系统要求、原生模块构建以及验证范围见 [跨平台使用说明](docs/cross-platform.md)。
+
+从源码启动（需要 Node.js 22、npm 和平台 C++ 构建工具）：
+
+```bash
+cd desktop
+npm ci
+npm test
+npm run build
+npx electron-builder install-app-deps
+npm start
+```
+
+发布构建会为目标系统、架构和 Electron 重建 `node-pty`。当前版本使用 Node-API；切换架构或升级原生依赖后应重新构建。日常使用已打包应用不需要安装 Node 或 Python；Linux 仍需要 Electron 使用的系统运行库。
+
+## 原有 GTK 版本
+
+原有 Python / GTK4 / VTE 版本与启动入口保留，继续适用于 Debian 13。以下安装依赖、启动命令和功能说明描述该版本。
 
 ## 安装依赖
 

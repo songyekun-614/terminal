@@ -1,0 +1,61 @@
+appId: io.github.macstyle.Terminal
+productName: terminal
+executableName: terminal
+asar: true
+asarUnpack:
+  - node_modules/node-pty/**
+  - assets/**
+npmRebuild: true
+buildDependenciesFromSource: true
+directories:
+  output: dist
+  buildResources: assets
+files:
+  - src/**
+  - renderer/index.html
+  - renderer/style.css
+  - renderer/app.bundle.js
+  - renderer/xterm.css
+  - assets/**
+  - package.json
+  - '!**/*.map'
+linux:
+  syncDesktopName: true
+  maintainer: songyekun-614
+  icon: assets/icon.png
+  category: System
+  synopsis: A standalone terminal with real shell sessions
+  description: A Mac-inspired terminal with tabs, appearance settings and native PTY sessions.
+  target:
+    - target: AppImage
+    - target: deb
+    - target: rpm
+  artifactName: '${productName}-${version}-linux-${arch}.${ext}'
+  desktop:
+    entry:
+      Name: terminal
+      Terminal: 'false'
+      StartupWMClass: terminal
+deb:
+  packageName: terminal
+rpm:
+  packageName: terminal
+win:
+  icon: assets/icon.ico
+  requestedExecutionLevel: asInvoker
+  target:
+    - target: nsis
+    - target: zip
+  artifactName: '${productName}-${version}-windows-${arch}.${ext}'
+nsis:
+  buildUniversalInstaller: false
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: terminal
+  artifactName: '${productName}-${version}-windows-${arch}-setup.${ext}'
+publish: null
