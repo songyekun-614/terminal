@@ -14,6 +14,12 @@ test.beforeEach(async () => {
     env: { ...process.env, TERMINAL_CONFIG_ROOT: root },
   });
   page = await app.firstWindow();
+  try {
+    await expect(page.getByRole("tab")).toHaveCount(1, { timeout: 15000 });
+  } catch (error) {
+    console.error("Terminal startup status:", await page.locator("#status").textContent());
+    throw error;
+  }
 });
 test.afterEach(async () => {
   if (app) {
