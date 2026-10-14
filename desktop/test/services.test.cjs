@@ -189,7 +189,7 @@ test(
         // Literal path is passed through the environment; no command interpolation.
         fs.writeFileSync(
           script,
-          "[Console]::WriteLine('PROMPT_SCRIPT_STARTED')\nfunction global:prompt { 'CUSTOM_PROFILE_PROMPT' }\n. $env:TERMINAL_PROMPT_SCRIPT\n[Console]::WriteLine('PROMPT_SCRIPT_LOADED')\n$global:LASTEXITCODE = 37\n$result = prompt\nif ($result -notlike '*CUSTOM_PROFILE_PROMPT*') { throw 'Custom prompt was discarded' }\nif ($global:LASTEXITCODE -ne 37) { throw 'Last exit status changed' }\n$result\n",
+          "[Console]::WriteLine('PROMPT_SCRIPT_STARTED')\nfunction global:prompt { 'CUSTOM_PROFILE_PROMPT' }\n. $env:TERMINAL_PROMPT_SCRIPT\n[Console]::WriteLine('PROMPT_SCRIPT_LOADED')\n$global:LASTEXITCODE = 37\nSet-PSDebug -Trace 1\n$result = prompt\nSet-PSDebug -Off\nif ($result -notlike '*CUSTOM_PROFILE_PROMPT*') { throw 'Custom prompt was discarded' }\nif ($global:LASTEXITCODE -ne 37) { throw 'Last exit status changed' }\n$result\n",
         );
         let output;
         try {
@@ -217,8 +217,8 @@ test(
           },
           );
         } catch (error) {
-          t.diagnostic("PowerShell stdout: " + String(error.stdout || ""));
-          t.diagnostic("PowerShell stderr: " + String(error.stderr || ""));
+          t.diagnostic("PowerShell stdout: " + String(error.stdout || "").slice(-6000));
+          t.diagnostic("PowerShell stderr: " + String(error.stderr || "").slice(-6000));
           throw error;
         }
         assert.ok(output.includes("CUSTOM_PROFILE_PROMPT"));
