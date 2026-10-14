@@ -1,0 +1,208 @@
+/* Native GTK controls, with one consistent surface and quiet hierarchy. */
+.terminal-window, .terminal-preferences { background-color: #17191e; color: #e5e7eb; }
+window.terminal-window { background-color: #24262b; border-radius: 20px; }
+.terminal-window .terminal-header {
+  min-height: 54px; padding: 0 14px; background-color: #24262b;
+  border-bottom: none; border-radius: 20px 20px 0 0;
+}
+window.terminal-window.maximized, .terminal-window.maximized .terminal-header,
+window.terminal-window.fullscreen, .terminal-window.fullscreen .terminal-header { border-radius: 0; }
+.terminal-preferences, window.terminal-confirmation { border-radius: 18px; }
+.terminal-preferences headerbar { border-radius: 18px 18px 0 0; }
+.terminal-preferences button { border-radius: 12px; }
+.terminal-header, .terminal-preferences headerbar {
+  background-image: none;
+  background-color: #292b30;
+  color: #e5e7eb;
+  box-shadow: none;
+  border-bottom: 1px solid #383b42;
+  min-height: 48px;
+  padding: 0 10px;
+}
+.terminal-header .title-label { font-size: 13px; font-weight: 600; }
+.terminal-header .subtitle-label { font-size: 11px; color: #a3a7b1; }
+.window-controls { margin-right: 12px; }
+button.traffic-control {
+  min-width: 32px; min-height: 32px; padding: 0;
+  background-image: none; background-color: transparent;
+  border: none; box-shadow: none;
+}
+.traffic-dot {
+  min-width: 16px; min-height: 16px; border-radius: 50%;
+}
+.traffic-symbol { opacity: 0; }
+.traffic-dot.close { background-color: #ff6259; }
+.traffic-dot.minimize { background-color: #ffbd2e; }
+.traffic-dot.maximize { background-color: #28c840; }
+button.traffic-control:hover .traffic-symbol,
+button.traffic-control:focus-visible .traffic-symbol { opacity: 1; }
+.chrome-button, .chrome-button > button {
+  min-width: 28px; min-height: 28px; padding: 3px;
+  background-image: none; background-color: transparent;
+  border-color: transparent; border-radius: 10px; box-shadow: none; color: #c4c7d0;
+}
+.chrome-button:hover, .chrome-button > button:hover { background-color: #3b3e46; }
+.terminal-menu-button > button {
+  min-width: 36px; min-height: 28px; padding: 3px 8px;
+  margin-left: 4px; border: 1px solid transparent; border-radius: 10px;
+  background-image: none; background-color: transparent;
+  box-shadow: none; color: #c4c7d0;
+}
+.terminal-menu-button > button:hover,
+.terminal-menu-button > button:checked { background-color: #3b3e46; border-color: #454a56; color: #f2f3f5; }
+.terminal-menu-button > button:focus-visible { outline: 2px solid #9eb7da; outline-offset: 2px; }
+popover.terminal-menu contents {
+  min-width: 248px; padding: 8px; border-radius: 16px;
+  border: 1px solid #454a56;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+popover.terminal-menu modelbutton {
+  min-height: 24px; padding: 8px 10px; margin: 2px 0;
+  border-radius: 9px; font-size: 13px;
+}
+popover.terminal-menu modelbutton:hover,
+popover.terminal-menu modelbutton:selected { background-color: #3b3e46; }
+popover.terminal-menu label.title {
+  font-size: 11px; font-weight: 600; color: #a3a7b1; opacity: 1;
+  margin: 4px 10px; padding: 0;
+}
+popover.terminal-menu separator { background-color: #454a56; min-height: 1px; }
+popover.terminal-menu accelerator { font-size: 11px; color: #a3a7b1; margin-left: 24px; }
+.profile-basic .terminal-menu-button > button { color: #535760; }
+.profile-basic .terminal-menu-button > button:hover,
+.profile-basic .terminal-menu-button > button:checked { background-color: #deddda; border-color: #cecdca; color: #242528; }
+.profile-basic .terminal-menu-button > button:focus-visible { outline-color: #657c9b; }
+.profile-basic popover.terminal-menu modelbutton:hover,
+.profile-basic popover.terminal-menu modelbutton:selected { background-color: #eeedeb; }
+.profile-basic popover.terminal-menu accelerator { color: #696c74; }
+.profile-basic popover.terminal-menu label.title { color: #696c74; }
+.profile-basic popover.terminal-menu separator { background-color: #dad9d6; }
+notebook.terminal-tabs > header {
+  background-color: #24262b; background-image: none;
+  border: none; padding: 4px 4px 8px;
+}
+notebook.terminal-tabs, notebook.terminal-tabs > stack { background-color: transparent; }
+notebook.terminal-tabs > header tab {
+  transition: none;
+  min-width: 0; min-height: 28px;
+  padding: 4px 6px 4px 10px; margin: 0 2px;
+  border: 1px solid transparent; border-radius: 11px;
+  color: #969ba7; background-color: transparent;
+  box-shadow: none; font-size: 12px;
+}
+notebook.terminal-tabs > header tab:hover { background-color: #2c2f36; color: #e5e7eb; }
+notebook.terminal-tabs > header tab:checked {
+  background-color: #35383f; color: #f2f3f5;
+  border-color: #454a56;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+button.tab-close {
+  min-width: 24px; min-height: 24px; padding: 0;
+  background-image: none; background-color: transparent;
+  border: none; border-radius: 8px; box-shadow: none; color: #969ba7;
+}
+button.tab-close:hover { color: #f2f3f5; background-color: #474b55; }
+button.tab-close:focus-visible { outline: 2px solid #9eb7da; outline-offset: 1px; }
+.terminal-page { background-color: #17191e; border-radius: 14px; }
+.terminal-page scrollbar { background-color: transparent; }
+.terminal-page scrollbar slider { min-width: 5px; background-color: #555a65; border: none; }
+.section-title { font-size: 20px; font-weight: 600; }
+.settings-description { font-size: 12px; color: #a3a7b1; }
+.color-error { font-size: 12px; color: #ff918b; }
+.profile-basic .color-error { color: #a62e28; }
+.background-preview { border-radius: 12px; border: 1px solid #454a56; }
+.profile-basic .background-preview { border-color: #cecdca; }
+.terminal-preferences button.wallpaper-action {
+  background-image: none; background-color: #30333b; color: #e5e7eb;
+  border: 1px solid #454a56; box-shadow: none; padding: 6px 10px;
+}
+.terminal-preferences button.wallpaper-action:hover { background-color: #3b3e46; }
+.terminal-preferences.profile-basic button.wallpaper-action { background-color: #eeedeb; color: #242528; border-color: #cecdca; }
+.terminal-preferences.profile-basic button.wallpaper-action:hover { background-color: #deddda; }
+.settings-group { background-color: #24262c; border: 1px solid #353942; border-radius: 14px; }
+.settings-row { padding: 14px 16px; border-bottom: 1px solid #353942; }
+.settings-row:last-child { border-bottom: none; }
+.terminal-preferences entry, .terminal-preferences dropdown button, .terminal-preferences spinbutton {
+  background-image: none; background-color: #30333b;
+  color: #e5e7eb; border-color: #454a56; border-radius: 12px;
+}
+.terminal-preferences headerbar button, .terminal-preferences spinbutton button {
+  background-image: none; background-color: transparent;
+  color: #c4c7d0; border-color: transparent; box-shadow: none;
+}
+.terminal-preferences headerbar button:hover, .terminal-preferences spinbutton button:hover { background-color: #3b3e46; }
+.terminal-window popover contents, .terminal-preferences popover contents {
+  background-color: #292b30; color: #e5e7eb; border-color: #454a56;
+}
+.terminal-preferences popover contents { border-radius: 12px; }
+.terminal-window popover modelbutton:hover, .terminal-preferences popover row:selected { background-color: #3b3e46; }
+.terminal-preferences button.suggested-action {
+  background-image: none; background-color: #9eb7da; color: #17191e;
+  border-color: #9eb7da; padding: 9px 20px;
+}
+.terminal-rename .titlebar { min-height: 0; padding: 0; border: none; background: transparent; }
+.terminal-rename entry { padding: 8px 10px; border-radius: 12px; }
+.terminal-rename button { border-radius: 12px; padding: 8px 16px; }
+.terminal-rename button:not(.suggested-action) {
+  background-image: none; background-color: #30333b; color: #e5e7eb; border-color: #454a56;
+}
+.terminal-rename button:not(.suggested-action):hover { background-color: #3b3e46; }
+.terminal-rename.profile-basic button:not(.suggested-action) { background-color: #eeedeb; color: #242528; border-color: #cecdca; }
+.terminal-rename.profile-basic button:not(.suggested-action):hover { background-color: #deddda; }
+.profile-homebrew .terminal-page { background-color: #101814; }
+.profile-basic { background-color: #faf9f7; color: #242528; }
+window.terminal-window.profile-basic { background-color: #eeedeb; }
+.profile-basic .terminal-header, .terminal-preferences.profile-basic headerbar {
+  background-color: #eeedeb; color: #242528; border-bottom-color: #d9d8d6;
+}
+.profile-basic .subtitle-label, .profile-basic .settings-description { color: #696c74; }
+.profile-basic .chrome-button, .profile-basic .chrome-button > button { color: #535760; }
+.profile-basic .chrome-button:hover, .profile-basic .chrome-button > button:hover { background-color: #deddda; }
+.profile-basic notebook.terminal-tabs > header { background-color: #eeedeb; }
+.profile-basic notebook.terminal-tabs > header tab { color: #696c74; }
+.profile-basic notebook.terminal-tabs > header tab:hover { background-color: #deddda; }
+.profile-basic notebook.terminal-tabs > header tab:checked {
+  background-color: #faf9f7; color: #242528; border-color: #d9d8d6;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.profile-basic button.tab-close { color: #696c74; }
+.profile-basic button.tab-close:hover { color: #242528; background-color: #deddda; }
+.profile-basic button.tab-close:focus-visible { outline-color: #657c9b; }
+.profile-basic .terminal-page { background-color: #faf9f7; }
+.profile-basic .settings-group { background-color: #f0efed; border-color: #dad9d6; }
+.profile-basic .settings-row { border-bottom-color: #dad9d6; }
+.terminal-preferences.profile-basic entry, .terminal-preferences.profile-basic dropdown button, .terminal-preferences.profile-basic spinbutton {
+  background-color: #faf9f7; color: #242528; border-color: #cecdca;
+}
+.terminal-preferences.profile-basic headerbar button, .terminal-preferences.profile-basic spinbutton button { color: #535760; }
+.profile-basic popover contents { background-color: #faf9f7; color: #242528; border-color: #cecdca; }
+
+/* Confirmation sheets share the terminal's neutral surfaces. */
+window.terminal-confirmation { background-color: #24262c; color: #e5e7eb; }
+.terminal-confirmation .titlebar {
+  min-height: 0; padding: 0; border: none; box-shadow: none; background: transparent;
+}
+.terminal-confirmation .confirmation-icon { color: #c4c7d0; margin-bottom: 4px; }
+.terminal-confirmation .confirmation-title { font-size: 20px; font-weight: 600; }
+.terminal-confirmation .confirmation-description { font-size: 13px; color: #a3a7b1; }
+.terminal-confirmation button {
+  background-image: none; box-shadow: none; border-radius: 12px;
+  min-height: 24px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+}
+.terminal-confirmation button.confirmation-cancel {
+  background-color: #30333b; color: #e5e7eb; border: 1px solid #454a56;
+}
+.terminal-confirmation button.confirmation-cancel:hover { background-color: #3b3e46; }
+.terminal-confirmation button.confirmation-close {
+  background-color: #c43d36; color: #ffffff; border: 1px solid #c43d36;
+}
+.terminal-confirmation button.confirmation-close:hover { background-color: #af332e; border-color: #af332e; }
+.terminal-confirmation button:focus-visible { outline: 2px solid #9eb7da; outline-offset: 2px; }
+window.terminal-confirmation.profile-basic { background-color: #faf9f7; color: #242528; }
+.terminal-confirmation.profile-basic .confirmation-icon { color: #535760; }
+.terminal-confirmation.profile-basic .confirmation-description { color: #696c74; }
+.terminal-confirmation.profile-basic button.confirmation-cancel {
+  background-color: #eeedeb; color: #242528; border-color: #cecdca;
+}
+.terminal-confirmation.profile-basic button.confirmation-cancel:hover { background-color: #deddda; }
+.terminal-confirmation.profile-basic button:focus-visible { outline-color: #657c9b; }

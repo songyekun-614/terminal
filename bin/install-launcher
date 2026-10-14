@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+"""Install a desktop entry that points to this project directory."""
+
+from pathlib import Path
+import sys
+
+
+root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root))
+from mac_style_terminal.installation import install_launcher
+
+try:
+    print(install_launcher(root))
+except (OSError, ValueError, RuntimeError) as error:
+    print(f"安装失败：{error}", file=sys.stderr)
+    raise SystemExit(1)

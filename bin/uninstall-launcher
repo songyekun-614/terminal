@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+"""Remove the desktop entry, retaining the checkout and user settings."""
+
+from pathlib import Path
+import sys
+
+root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root))
+from mac_style_terminal.installation import uninstall_launcher
+
+try:
+    removed = uninstall_launcher()
+    print("桌面入口已卸载。" if removed else "桌面入口不存在，无需卸载。")
+except (OSError, ValueError) as error:
+    print(f"卸载失败：{error}", file=sys.stderr)
+    raise SystemExit(1)

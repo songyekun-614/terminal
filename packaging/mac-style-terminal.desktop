@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=terminal
+Comment=A compact terminal for Debian
+Exec=/bin/sh @APP_COMMAND@
+Icon=io.github.macstyle.Terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupNotify=true
+X-MacStyleTerminal-Managed=true
