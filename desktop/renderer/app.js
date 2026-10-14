@@ -38,13 +38,36 @@ async function copySelection() {
   if (text) await api.writeClipboard(text);
   if (s === current()) s?.term.focus();
 }
+function enqueueInput(s, operation) {
+  const queued = (s.inputQueue || Promise.resolve())
+    .then(() => {
+      if (sessions.get(s.id) === s && !s.exited) return operation();
+    })
+    .catch(error);
+  s.inputQueue = queued;
+  queued.then(() => {
+    if (s.inputQueue === queued) s.inputQueue = null;
+  });
+  return queued;
+}
 async function pasteClipboard() {
   const s = current();
   if (!s || s.exited) return;
-  const text = await api.readClipboard();
-  if (sessions.get(s.id) !== s || s.exited) return;
-  s.term.paste(text);
-  if (s === current()) s.term.focus();
+  return enqueueInput(s, async () => {
+    const text = await api.readClipboard();
+    if (sessions.get(s.id) !== s || s.exited) return;
+    // Keep xterm's newline and bracketed-paste handling, then send its data
+    // before the keystrokes queued while the clipboard was being read.
+    const input = [];
+    s.clipboardInput = input;
+    try {
+      s.term.paste(text);
+    } finally {
+      s.clipboardInput = null;
+    }
+    for (const data of input) await api.write(s.id, data);
+    if (s === current()) s.term.focus();
+  });
 }
 function fit(s = current()) {
   if (!s || s.id !== active || s.exited) return;
@@ -180,7 +203,9 @@ async function newTab() {
   earlyOutput.delete(info.id);
   term.onData((data) => {
     if (data.includes("\r")) s.idle = false;
-    api.write(info.id, data).catch(error);
+    if (s.clipboardInput) s.clipboardInput.push(data);
+    else if (s.inputQueue) enqueueInput(s, () => api.write(info.id, data));
+    else api.write(info.id, data).catch(error);
   });
   term.onTitleChange((title) => {
     s.autoTitle = title.trim().slice(0, 80) || s.label;

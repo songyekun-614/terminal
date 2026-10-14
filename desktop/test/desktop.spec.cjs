@@ -44,6 +44,60 @@ test("Ctrl+V pastes clipboard text once into the real shell", async () => {
     .match(/clipboard-你好/g)).toHaveLength(1);
 });
 
+test("Enter waits for a delayed clipboard read before reaching the shell", async () => {
+  await app.evaluate(({ clipboard }, command) => {
+    clipboard.writeText(command);
+    const readText = clipboard.readText.bind(clipboard);
+    clipboard.readText = () => new Promise((resolve) =>
+      setTimeout(() => resolve(readText()), 300));
+  }, process.platform === "win32"
+    ? "Write-Output ('ordered-' + 'clipboard')"
+    : "printf '%s\\n' 'ordered-'clipboard");
+  await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+V");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-pane.active .xterm-screen"))
+    .toContainText("ordered-clipboard");
+});
+
+test("typing after a delayed paste preserves the user's input order", async () => {
+  await app.evaluate(({ clipboard }, command) => {
+    clipboard.writeText(command);
+    const readText = clipboard.readText.bind(clipboard);
+    clipboard.readText = () => new Promise((resolve) =>
+      setTimeout(() => resolve(readText()), 300));
+  }, process.platform === "win32"
+    ? "Write-Output ('typed-' + '"
+    : "printf '%s\\n' 'typed-'");
+  await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+Shift+V");
+  await page.keyboard.type(process.platform === "win32" ? "suffix')" : "suffix");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-pane.active .xterm-screen"))
+    .toContainText("typed-suffix");
+});
+
+test("a delayed paste stays in its original tab without taking focus back", async () => {
+  await app.evaluate(({ clipboard }, command) => {
+    clipboard.writeText(command);
+    const readText = clipboard.readText.bind(clipboard);
+    clipboard.readText = () => new Promise((resolve) =>
+      setTimeout(() => resolve(readText()), 700));
+  }, process.platform === "win32"
+    ? "Write-Output ('original-' + 'tab')"
+    : "printf '%s\\n' 'original-'tab");
+  await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+V");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "新建标签页", exact: true }).click();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane").first().locator(".xterm-screen"))
+    .toContainText("original-tab");
+  await expect(page.locator(".terminal-pane.active .xterm-screen"))
+    .not.toContainText("original-tab");
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
 test("menu paste returns focus so Enter executes the pasted command", async () => {
   await expect(page.getByRole("tab")).toHaveCount(1);
   await app.evaluate(({ clipboard }, command) => clipboard.writeText(command),
