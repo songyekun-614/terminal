@@ -2,14 +2,97 @@
 
 一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。SSH 暂停开发。
 
-## 默认独立版本
+## Windows / Linux 安装
 
-下载与系统架构一致的安装包：Windows 提供用户级 NSIS 安装器和 zip；Linux 提供 AppImage、deb 和 rpm。安装、卸载、系统要求、原生模块构建以及验证范围见 [跨平台使用说明](docs/cross-platform.md)。
+日常使用安装包不需要安装 Node.js 或 Python。需要图形桌面；终端运行系统已有的 shell。
 
-从源码启动（需要 Node.js 22、npm 和平台 C++ 构建工具）：
+### 下载安装包与选择架构
+
+打开 [GitHub Actions 构建列表](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml)，选择成功的构建，在页面底部 **Artifacts** 下载对应系统和架构的压缩包，然后解压。下载 Actions 产物需要登录 GitHub，产物有保存期限。[已通过四个平台验证的构建](https://github.com/songyekun-614/terminal/actions/runs/38549092618)提供以下产物：
+
+| 系统 | Actions 产物 | 包内文件 |
+| --- | --- | --- |
+| Windows x64 | `terminal-win-x64` | `*-setup.exe` 安装器、便携程序 zip |
+| Windows ARM64 | `terminal-win-arm64` | `*-setup.exe` 安装器、便携程序 zip |
+| Linux x64 | `terminal-linux-x64` | AppImage、deb、rpm |
+| Linux ARM64 | `terminal-linux-arm64` | AppImage、deb、rpm |
+
+Windows 在“设置 → 系统 → 系统信息（关于）→ 系统类型”查看架构：Intel / AMD 的 64 位电脑选择 `x64`，ARM 电脑选择 `arm64`。Linux 运行 `uname -m`：`x86_64` 对应 `x64`，`aarch64` 对应 `arm64`。目前提供这两种架构。
+
+以下命令以 **0.2.0 x64** 安装包为例，在下载文件所在目录执行；ARM64 用户将文件名中的 `x64` 换成 `arm64`，其他版本按实际文件名修改。
+
+### Windows
+
+1. 下载并解压对应的 Actions 产物。
+2. 双击 `terminal-0.2.0-windows-x64-setup.exe`，按提示选择安装目录。安装到当前用户，无需管理员权限。
+3. 从开始菜单或桌面快捷方式启动 **terminal**。默认使用已安装的 PowerShell 7，否则使用 Windows PowerShell；可在外观设置中选择 cmd。
+
+也可使用 zip 版本：解压产物中的 `terminal-0.2.0-windows-x64.zip` 到当前用户可写的目录，双击其中的 `terminal.exe`。设置仍保存在用户配置目录。
+
+当前安装包未签名，Windows 可能显示 SmartScreen 提示。请核对文件来自本仓库构建。兼容性目标为 Windows 10 x64 1809+、ARM64 1903+ 和 Windows 11；原生 CI 已验证 Windows Server 2022 x64 与 Windows 11 ARM64，Windows 10 尚未实机验证。
+
+卸载安装版：在“设置 → 应用”中卸载 **terminal**；zip 版删除解压目录即可。卸载保留设置和已导入的壁纸。
+
+### Debian / Ubuntu
+
+推荐使用 deb 包，由包管理器安装所需运行库：
 
 ```bash
-cd desktop
+sudo apt install ./terminal-0.2.0-linux-x64.deb
+terminal
+```
+
+安装后也可从应用菜单启动。卸载：`sudo apt remove terminal`。
+
+### Fedora / openSUSE
+
+Fedora：
+
+```bash
+sudo dnf install ./terminal-0.2.0-linux-x64.rpm
+terminal
+```
+
+openSUSE：
+
+```bash
+sudo zypper install ./terminal-0.2.0-linux-x64.rpm
+terminal
+```
+
+卸载分别使用 `sudo dnf remove terminal` 或 `sudo zypper remove terminal`。
+
+### Arch Linux 与其他 Linux 桌面发行版
+
+使用对应架构的 AppImage，以普通桌面用户启动：
+
+```bash
+chmod +x terminal-0.2.0-linux-x64.AppImage
+./terminal-0.2.0-linux-x64.AppImage
+```
+
+AppImage 可能需要 FUSE 2 兼容库（Ubuntu 22.04 为 `libfuse2`，Ubuntu 24.04 为 `libfuse2t64`）。没有 FUSE 时，可解压运行：
+
+```bash
+./terminal-0.2.0-linux-x64.AppImage --appimage-extract
+./squashfs-root/AppRun
+```
+
+AppImage 不自动创建应用菜单入口，删除文件或解压目录即可卸载。系统需提供 GTK3、NSS、GBM、ALSA 等 Electron 运行库，并允许 Chromium sandbox；不要用 root 启动或关闭 sandbox。
+
+Linux 已验证 Ubuntu 22.04 x64、Ubuntu 24.04 ARM64 和本地 Debian 13 x64。Fedora、Arch、openSUSE 尚未逐个实机验证；旧版发行版的 glibc 或桌面运行库可能不兼容。详细系统要求、配置位置和构建说明见 [跨平台使用说明](docs/cross-platform.md)。
+
+### macOS
+
+目前没有 macOS 安装包，也没有 macOS 构建与运行验证。项目名称和外观参考 Mac 终端；当前交付平台为 Windows 和 Linux。
+
+## 从源码运行独立版本
+
+从源码启动（需要 Node.js 22.12+、npm、Python 和平台 C++ 构建工具，依赖准备见 [跨平台使用说明](docs/cross-platform.md#从源码构建和验证)）：
+
+```bash
+git clone https://github.com/songyekun-614/terminal.git
+cd terminal/desktop
 npm ci
 npm test
 npm run build
@@ -23,7 +106,7 @@ npm start
 
 原有 Python / GTK4 / VTE 版本与启动入口保留，继续适用于 Debian 13。以下安装依赖、启动命令和功能说明描述该版本。
 
-## 安装依赖
+## GTK 版本安装依赖
 
 在 Debian 13 上运行：
 
@@ -32,10 +115,10 @@ sudo apt update
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-vte-3.91 libvte-2.91-gtk4-0
 ```
 
-项目目录可放在 `/home/song/Projects/mac-style-terminal`。运行：
+在克隆的项目目录运行：
 
 ```bash
-cd /home/song/Projects/mac-style-terminal
+cd terminal
 ./bin/mac-style-terminal
 ```
 
