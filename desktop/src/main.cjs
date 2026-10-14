@@ -57,6 +57,7 @@ function fonts() {
         "powershell.exe",
       );
       const code =
+        "$env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules') + ';' + $env:PSModulePath; " +
         "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts' | Select-Object -ExpandProperty PSObject | Select-Object -ExpandProperty Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { $_.Name -replace ' \\(.*\\)$','' }";
       execFile(
         executable,
