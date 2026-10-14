@@ -95,6 +95,10 @@ class Sessions {
       this.onOutput({ id, data });
     });
     terminal.onExit(({ exitCode }) => {
+      // node-pty 1.1.0 leaves its ConPTY worker alive after natural exit.
+      // Dispose the drained worker without killing a potentially reused shell PID.
+      if (process.platform === "win32")
+        terminal._agent?._conoutSocketWorker?.dispose();
       this.items.delete(id);
       this.onExit({ id, exitCode });
     });

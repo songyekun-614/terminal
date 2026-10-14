@@ -169,6 +169,34 @@ test("split OSC state tracks idle/busy and directories without partial marker co
   state.track(s, `\x1b]7;file:///${directory.replace(/^\//, "")}\x1b\\`);
   assert.equal(path.normalize(s.cwd), path.normalize(os.tmpdir()));
 });
+test("a naturally exited PTY releases resources so its Node host can exit", async () => {
+  const { execFile } = require("node:child_process");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-exit-"));
+  const code = `
+    const { Sessions } = require(${JSON.stringify(sessionsFile)});
+    let sent = false;
+    const keepAlive = setInterval(() => {}, 1000);
+    const sessions = new Sessions({
+      root: ${JSON.stringify(root)},
+      assets: ${JSON.stringify(path.join(__dirname, "../assets"))},
+      onOutput: ({ id, data }) => {
+        sessions.ack(id, Buffer.byteLength(data));
+        if (!sent) { sent = true; sessions.write(id, "exit\\r"); }
+      },
+      onExit: () => { clearInterval(keepAlive); process.stdout.write("SESSION_CLOSED\\n"); },
+    });
+    sessions.create({ shell: process.platform === "win32" ? "cmd" : "bash", cwd: ${JSON.stringify(root)} });
+  `;
+  try {
+    const output = await new Promise((resolve, reject) => {
+      execFile(process.execPath, ["-e", code], { encoding: "utf8", timeout: 15000 },
+        (error, stdout) => error ? reject(new Error("PTY host did not exit: " + error.message + "\n" + stdout)) : resolve(stdout));
+    });
+    assert.ok(output.includes("SESSION_CLOSED"));
+  } finally {
+    await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
 test(
   "Windows PowerShell integration preserves the original prompt function and last native exit status",
   { skip: process.platform !== "win32" },

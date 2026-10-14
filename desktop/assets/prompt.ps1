@@ -8,7 +8,7 @@ function global:prompt {
     $savedExitCode = $global:LASTEXITCODE
     $color = '#28c840'
     try {
-        $preferences = Get-Content -LiteralPath $env:MAC_STYLE_TERMINAL_SETTINGS -Raw -ErrorAction Stop | ConvertFrom-Json
+        $preferences = [IO.File]::ReadAllText($env:MAC_STYLE_TERMINAL_SETTINGS) | ConvertFrom-Json
         if ($preferences.username_color -match '^#[0-9a-fA-F]{6}$') { $color = $preferences.username_color }
     } catch {}
     $r = [Convert]::ToInt32($color.Substring(1,2),16)
