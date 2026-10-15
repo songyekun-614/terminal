@@ -104,6 +104,23 @@ npm start
 
 发布构建会为目标系统、架构和 Electron 重建 `node-pty`。当前版本使用 Node-API；切换架构或升级原生依赖后应重新构建。日常使用已打包应用不需要安装 Node 或 Python；Linux 仍需要 Electron 使用的系统运行库。
 
+## Linux 代理与 Codex 连接排查
+
+从应用菜单启动终端时，桌面进程不一定包含 `http_proxy` / `https_proxy`。Linux 的 Electron 和 GTK 版本会在新建标签页时读取 GNOME 的**手动代理**设置，将有效的 HTTP、HTTPS、SOCKS 代理和绕过地址传给 shell 及其子进程。HTTPS 使用 HTTP CONNECT；SOCKS 使用 `socks5h://`。代理地址和端口来自用户的系统设置，不固定为某个软件或端口。
+
+已有的代理环境变量优先，大小写变量互相补齐；显式设置的空值也会保留。缺少 GNOME 设置、`gsettings` 不可用或读取超时时，仍可正常打开终端。此功能不修改 `.bashrc` 或系统代理，也不自动重启其他程序。
+
+此转换只支持 GNOME 手动代理。PAC/自动代理、其他桌面环境、Windows，以及需要认证的 HTTP 代理，请在 shell 配置中按网络环境显式设置代理变量。桌面代理密码不会复制到 shell 环境。系统代理变更后，请新建标签页；各命令行工具对 `NO_PROXY` 的支持可能不同。
+
+如果 Codex 仍然反复提示超时，可能是它复用了**设置代理之前就已启动的后台服务**。旧进程不会自动获得新终端的环境变量。先确认新标签页中已有正确的 `https_proxy` / `HTTPS_PROXY`，在其他 Codex 任务结束后执行：
+
+```bash
+codex app-server daemon restart
+codex doctor --summary
+```
+
+重启会断开共享该后台服务的客户端，请先结束相关任务。单次排查也可使用 `codex --no-daemon`，让该次会话直接使用当前终端环境。上述命令适用于支持共享后台服务的 Codex CLI 版本；旧版本请查阅 `codex --help`。代理服务本身仍需保持运行。
+
 ## 原有 GTK 版本
 
 原有 Python / GTK4 / VTE 版本与启动入口保留，继续适用于 Debian 13。以下安装依赖、启动命令和功能说明描述该版本。

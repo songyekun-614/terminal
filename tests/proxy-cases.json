@@ -1,0 +1,98 @@
+[
+  {
+    "name": "manual system HTTP proxy reaches HTTP and HTTPS children",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {
+      "PATH": "/usr/bin"
+    },
+    "want": {
+      "PATH": "/usr/bin",
+      "http_proxy": "http://127.0.0.1:8888",
+      "HTTP_PROXY": "http://127.0.0.1:8888",
+      "https_proxy": "http://127.0.0.1:8888",
+      "HTTPS_PROXY": "http://127.0.0.1:8888",
+      "no_proxy": "localhost,127.0.0.0/8,::1",
+      "NO_PROXY": "localhost,127.0.0.0/8,::1"
+    }
+  },
+  {
+    "name": "explicit environment including empty bypass wins",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {
+      "https_proxy": "http://custom:1234",
+      "HTTPS_PROXY": "http://other:5678",
+      "NO_PROXY": ""
+    },
+    "want": {
+      "http_proxy": "http://127.0.0.1:8888",
+      "HTTP_PROXY": "http://127.0.0.1:8888",
+      "https_proxy": "http://custom:1234",
+      "HTTPS_PROXY": "http://other:5678",
+      "no_proxy": "",
+      "NO_PROXY": ""
+    }
+  },
+  {
+    "name": "explicit all proxy takes priority over desktop settings",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {
+      "ALL_PROXY": "socks5h://custom:1080"
+    },
+    "want": {
+      "ALL_PROXY": "socks5h://custom:1080",
+      "all_proxy": "socks5h://custom:1080"
+    }
+  },
+  {
+    "name": "disabled proxy leaves environment alone",
+    "settings": "org.gnome.system.proxy mode 'none'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {
+      "PATH": "/bin"
+    },
+    "want": {
+      "PATH": "/bin"
+    }
+  },
+  {
+    "name": "PAC is not converted to a static proxy",
+    "settings": "org.gnome.system.proxy mode 'auto'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {},
+    "want": {}
+  },
+  {
+    "name": "IPv6 HTTPS endpoint uses HTTP CONNECT",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host '::1'\norg.gnome.system.proxy.https port 3128\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {},
+    "want": {
+      "http_proxy": "http://127.0.0.1:8888",
+      "HTTP_PROXY": "http://127.0.0.1:8888",
+      "https_proxy": "http://[::1]:3128",
+      "HTTPS_PROXY": "http://[::1]:3128",
+      "no_proxy": "localhost,127.0.0.0/8,::1",
+      "NO_PROXY": "localhost,127.0.0.0/8,::1"
+    }
+  },
+  {
+    "name": "invalid endpoint is not exported",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host 'bad/host'\norg.gnome.system.proxy.http port 70000\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {},
+    "want": {}
+  },
+  {
+    "name": "authenticated system HTTP proxy requires explicit credentials",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host '127.0.0.1'\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication true\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host ''\norg.gnome.system.proxy.socks port 0\n",
+    "env": {},
+    "want": {}
+  },
+  {
+    "name": "SOCKS fallback preserves remote DNS",
+    "settings": "org.gnome.system.proxy mode 'manual'\norg.gnome.system.proxy ignore-hosts ['localhost', '127.0.0.0/8', '::1']\norg.gnome.system.proxy.http host ''\norg.gnome.system.proxy.http port 8888\norg.gnome.system.proxy.http use-authentication false\norg.gnome.system.proxy.https host ''\norg.gnome.system.proxy.https port 0\norg.gnome.system.proxy.socks host 'localhost'\norg.gnome.system.proxy.socks port 1080\n",
+    "env": {},
+    "want": {
+      "all_proxy": "socks5h://localhost:1080",
+      "ALL_PROXY": "socks5h://localhost:1080",
+      "no_proxy": "localhost,127.0.0.0/8,::1",
+      "NO_PROXY": "localhost,127.0.0.0/8,::1"
+    }
+  }
+]

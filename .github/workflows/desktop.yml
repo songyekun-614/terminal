@@ -1,9 +1,9 @@
 name: Desktop native builds
 on:
   push:
-    paths: ['desktop/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'tests/proxy-cases.json', '.github/workflows/desktop.yml']
   pull_request:
-    paths: ['desktop/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'tests/proxy-cases.json', '.github/workflows/desktop.yml']
   workflow_dispatch:
     inputs:
       publish_release:

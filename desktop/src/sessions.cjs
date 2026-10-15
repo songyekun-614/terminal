@@ -1,5 +1,6 @@
 "use strict";
 const pty = require("node-pty");
+const { proxyEnvironment } = require("./proxy.cjs");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -49,7 +50,7 @@ class Sessions {
       cwd = os.homedir();
     const command = commandFor(profile, this.assets),
       env = {
-        ...process.env,
+        ...proxyEnvironment(),
         TERM: "xterm-256color",
         COLORTERM: "truecolor",
         MAC_STYLE_TERMINAL_SETTINGS: path.join(this.root, "settings.json"),

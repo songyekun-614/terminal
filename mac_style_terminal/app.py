@@ -13,6 +13,7 @@ gi.require_version("Vte", "3.91")
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango, Vte
 
 from .session import choose_shell, directory_from_session, shell_command
+from .proxy import proxy_environment
 from .settings import BACKGROUND_PRESETS, PROFILES, USERNAME_COLOR_PRESETS, Settings, config_path, load_settings, normalize_background, save_settings, terminal_palette
 from .transitions import PopupReveal, TabTransition
 from .wallpaper import WallpaperSurface, import_wallpaper, load_wallpaper, remove_wallpaper_copy
@@ -125,7 +126,8 @@ class TerminalTab:
         self.exited = False
         self._refresh_caption()
         self.retry_button.set_visible(False)
-        environment = GLib.environ_setenv(GLib.get_environ(), "TERM", "xterm-256color", True)
+        environment = [f"{key}={value}" for key, value in proxy_environment().items()]
+        environment = GLib.environ_setenv(environment, "TERM", "xterm-256color", True)
         environment = GLib.environ_setenv(environment, "MAC_STYLE_TERMINAL_SETTINGS", str(config_path().absolute()), True)
         # Debian's binding exposes child_setup_data before timeout.
         # Describe VTE's capabilities instead of inheriting a launcher TERM=dumb.
