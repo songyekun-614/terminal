@@ -144,8 +144,9 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
 
-          - 修复复制粘贴快捷键、菜单焦点与异步粘贴后的按键顺序。
-          - 修复 Windows PowerShell 启动和 ConPTY 退出清理。
+          - 修复 Linux 从桌面启动时未将 GNOME 手动代理传给 shell 的问题，避免 Codex 等命令行程序直连超时。
+          - 自动继承 HTTP、HTTPS、SOCKS 代理与绕过地址，保留用户已有代理变量的优先级，不修改 shell 或系统配置。
+          - 补充旧 Codex 后台服务的恢复说明及真实 PTY 回归测试。
           - 四个平台均完成服务测试、界面测试和打包后回归测试。
 
           下载与系统架构一致的文件：Windows 使用 setup.exe 或 zip；Debian / Ubuntu 使用 deb；Fedora / openSUSE 使用 rpm；其他 Linux 桌面可使用 AppImage。
