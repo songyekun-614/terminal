@@ -1,5 +1,15 @@
 # 跨平台版本验证记录
 
+## 2026-10-17：Esc 关闭功能本地验证
+
+基于 0.2.1 源码，验证本地尚未发布的 Esc 关闭功能：弹窗、菜单、搜索栏优先取消，其次关闭当前标签页，最后一个标签页退出窗口；忙碌会话保留关闭确认，长按和确认等待期间的重复按键不会连关标签页。
+
+- Debian 13 x64：`npm test` 18 项通过、1 项 Windows 专项跳过；`npm run build` 通过。
+- Electron 源码版：22 项端到端测试全部通过，其中 9 项覆盖 Esc 行为。重命名测试等待保存后的标题更新，再重开弹窗，避免异步关闭事件尚未完成就继续下一步。
+- 使用已安装的 Electron 完成本地打包：`npm run pack -- --config.electronDist=node_modules/electron/dist`；`desktop/dist/linux-unpacked/terminal` 的同一套 22 项测试全部通过。
+- 界面测试在当前执行沙箱外运行；沙箱内 Electron 启动被系统调用限制拦截。
+- 本轮未生成 AppImage/deb/rpm 或 Windows 安装包，未验证 Windows/ARM64，也未发布。以下为此前版本的历史记录。
+
 日期：2026-10-14，版本：0.2.0。
 
 ## 复制粘贴修复验证

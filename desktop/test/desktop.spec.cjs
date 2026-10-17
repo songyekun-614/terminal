@@ -16,6 +16,7 @@ test.beforeEach(async () => {
   page = await app.firstWindow();
   try {
     await expect(page.getByRole("tab")).toHaveCount(1, { timeout: 15000 });
+    await waitForIdleTerminal();
   } catch (error) {
     console.error("Terminal startup status:", await page.locator("#status").textContent());
     throw error;
@@ -445,4 +446,140 @@ test('zoom reset restores the saved font size', async () => {
   await expect(font).toHaveCSS('font-size','17px');
   await page.keyboard.press('Control+0');
   await expect(font).toHaveCSS('font-size','18px');
+});
+
+async function waitForIdleTerminal() {
+  await expect.poll(() => page.evaluate(async () => {
+    const pane = document.querySelector(".terminal-pane.active");
+    return pane && !(await window.terminalAPI.sessionInfo(pane.id.slice(9))).busy;
+  }), { timeout: 15000 }).toBe(true);
+}
+
+test("Escape closes only the active tab and restores terminal focus", async () => {
+  await page.getByRole("button", { name: "新建标签页", exact: true }).click();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const activePane = await page.locator(".terminal-pane.active").getAttribute("id");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(`[id="${activePane}"]`)).toHaveCount(0);
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
+test("Escape on the final idle tab exits the terminal window", async () => {
+  await waitForIdleTerminal();
+  const closed = page.waitForEvent("close");
+  await page.keyboard.press("Escape").catch(error => {
+    if (!page.isClosed()) throw error;
+  });
+  await closed;
+  expect(page.isClosed()).toBe(true);
+});
+
+test("Escape cancels settings before dismissing search without closing a tab", async () => {
+  await page.locator("#search-open").click();
+  await page.locator("#settings-open").click();
+  const before = await page.locator("body").evaluate(el => el.style.getPropertyValue("--terminal-bg"));
+  await page.locator('[name="background"]').fill("#abcdef");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#settings")).not.toBeVisible();
+  await expect(page.locator("#search")).toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect.poll(() => page.locator("body").evaluate(el => el.style.getPropertyValue("--terminal-bg"))).toBe(before);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#search")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
+test("Escape cancels a reopened settings dialog after an earlier save", async () => {
+  await page.locator("#settings-open").click();
+  await page.locator('[name="background"]').fill("#223344");
+  await page.locator('#settings-form button[type="submit"]').click();
+  await expect(page.locator("#settings")).not.toBeVisible();
+  await page.locator("#settings-open").click();
+  await page.locator('[name="background"]').fill("#abcdef");
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.locator("body").evaluate(el => el.style.getPropertyValue("--terminal-bg"))).toBe("#223344");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("Escape cancels a reopened rename dialog without applying its input", async () => {
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("kept title");
+  await page.locator('#rename button[value="save"]').click();
+  await expect(page.getByRole("tab")).toHaveText("kept title");
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("discarded title");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab")).toHaveText("kept title");
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
+test("Escape dismisses menu and about without closing the tab", async () => {
+  await page.locator("#menu-open").click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#menu")).not.toBeVisible();
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+  await page.locator("#menu-open").click();
+  await page.getByRole("button", { name: "关于终端", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#about")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
+test("held Escape does not close another tab", async () => {
+  await page.getByRole("button", { name: "新建标签页", exact: true }).click();
+  await waitForIdleTerminal();
+  await page.keyboard.down("Escape");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await page.keyboard.down("Escape");
+  await page.keyboard.up("Escape");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("Escape on the last busy tab honors cancellation and confirmation", async () => {
+  await waitForIdleTerminal();
+  await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(async () => (await window.terminalAPI.sessionInfo(document.querySelector(".terminal-pane.active").id.slice(9))).busy)).toBe(true);
+  await app.evaluate(({ dialog }) => {
+    global.escapeConfirmations = 0;
+    dialog.showMessageBox = async () => {
+      global.escapeConfirmations++;
+      return { response: 0 };
+    };
+  });
+  await page.keyboard.press("Escape");
+  await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+  const closed = page.waitForEvent("close");
+  await page.keyboard.press("Escape").catch(error => {
+    if (!page.isClosed()) throw error;
+  });
+  await closed;
+  expect(page.isClosed()).toBe(true);
+});
+
+test("Escape while a busy tab confirmation is pending cannot close another tab", async () => {
+  await page.getByRole("button", { name: "新建标签页", exact: true }).click();
+  await waitForIdleTerminal();
+  await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
+  await page.keyboard.press("Enter");
+  await app.evaluate(({ dialog }) => {
+    global.escapeConfirmations = 0;
+    dialog.showMessageBox = () => {
+      global.escapeConfirmations++;
+      return new Promise(resolve => { global.resolveEscapeConfirmation = resolve; });
+    };
+  });
+  await page.keyboard.press("Escape");
+  await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
+  await page.keyboard.press("Escape");
+  expect(await app.evaluate(() => global.escapeConfirmations)).toBe(1);
+  await app.evaluate(() => global.resolveEscapeConfirmation({ response: 1 }));
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
