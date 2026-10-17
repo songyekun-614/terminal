@@ -16,6 +16,7 @@ test.beforeEach(async () => {
   page = await app.firstWindow();
   try {
     await expect(page.getByRole("tab")).toHaveCount(1, { timeout: 15000 });
+    await waitForIdleTerminal();
   } catch (error) {
     console.error("Terminal startup status:", await page.locator("#status").textContent());
     throw error;
@@ -451,7 +452,7 @@ async function waitForIdleTerminal() {
   await expect.poll(() => page.evaluate(async () => {
     const pane = document.querySelector(".terminal-pane.active");
     return pane && !(await window.terminalAPI.sessionInfo(pane.id.slice(9))).busy;
-  })).toBe(true);
+  }), { timeout: 15000 }).toBe(true);
 }
 
 test("Escape closes only the active tab and restores terminal focus", async () => {
