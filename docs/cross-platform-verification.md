@@ -6,6 +6,7 @@
 
 - 本地 Debian 13 x64：服务测试 18 项通过，1 项 Windows 专用跳过；源码界面测试 32 项全部通过，构建、版本/lockfile 一致性、工作流 YAML 和 `git diff --check` 通过。此前分屏开发轮次也已对 Linux 解包应用通过同一套 32 项测试。
 - 分屏尺寸回归已扩展为 Windows `[Console]::WindowHeight` / `WindowWidth` 与 Linux `stty size`，通过真实 PTY/ConPTY 检查缩窄面板后的列数变化。测试目录在应用关闭后清理，并为 Windows 文件句柄释放提供有限重试。
+- 首轮 Windows x64 原生检查发现目录断言将同一临时目录的 `RUNNER~1` 8.3 别名和 `runneradmin` 长名称误判为不同目录；其余 30 项通过、1 项既有平台专项跳过。目录继承断言改为从返回目录读取唯一标记文件，验证实际目录归属，不依赖路径拼写。
 - 发布门槛：现有四个原生 runner 分别运行服务测试、32 项源码界面测试、匹配架构的安装包构建和32项打包后界面回归。此处记录准备状态，实际原生结果以 [GitHub Actions](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml) 对应 0.3.0 提交为准。
 - 正式发布任务仅在全部原生检查通过后运行，核对 10 个安装包，生成并验证 SHA256SUMS，再上传 [v0.3.0 Release](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)。版本号或 README 更新本身不表示已经发布。
 - Windows 安装包未签名；Windows 10、Fedora、Arch、openSUSE 仍需实机验证。macOS 无安装包或原生验证。以下记录保留当时的验证范围，不代表当前版本状态。

@@ -26,6 +26,7 @@ test.beforeEach(async () => {
 test("split panes run independent shells and inherit the focused directory", async () => {
   const folder = path.join(root, "split-directory");
   fs.mkdirSync(folder);
+  fs.writeFileSync(path.join(folder, "directory-marker"), root);
   await page.keyboard.type(process.platform === "win32"
     ? `Set-Location -LiteralPath '${folder.replaceAll("'", "''")}'`
     : `cd '${folder.replaceAll("'", "'\\''")}'`);
@@ -37,11 +38,9 @@ test("split panes run independent shells and inherit the focused directory", asy
   await waitForIdleTerminal();
   const id = (await page.locator(".terminal-pane.active").getAttribute("id")).slice(9);
   const cwd = (await page.evaluate(id => window.terminalAPI.sessionInfo(id), id)).cwd;
-  const canonical = directory => {
-    const real = fs.realpathSync(directory);
-    return process.platform === "win32" ? real.toLowerCase() : real;
-  };
-  expect(canonical(cwd)).toBe(canonical(folder));
+  // Windows may report the same directory through its 8.3 alias or long path.
+  // Reading the unique marker tests directory identity without spelling assumptions.
+  expect(fs.readFileSync(path.join(cwd, "directory-marker"), "utf8")).toBe(root);
   await splitOutput("right");
   await expect(page.locator(".terminal-pane").first()).not.toContainText("split-right");
   await page.keyboard.press("Control+Shift+O");
