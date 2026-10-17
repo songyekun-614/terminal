@@ -1,5 +1,27 @@
 # 跨平台版本验证记录
 
+## 2026-10-17：0.3.0 分屏四平台发布准备
+
+0.3.0 交付左右/上下嵌套分屏、独立本地 shell、目录继承、面板焦点切换、分隔线比例调节和关闭后布局合并。保留 0.2.2 的外观与代理设置；布局不跨启动保存。此次范围是 Windows/Linux 的 x64、ARM64，不包含历史规划中的 SSH 管理、工作区恢复、在线更新或 macOS 适配。
+
+- 本地 Debian 13 x64：服务测试 18 项通过，1 项 Windows 专用跳过；源码界面测试 32 项全部通过，构建、版本/lockfile 一致性、工作流 YAML 和 `git diff --check` 通过。此前分屏开发轮次也已对 Linux 解包应用通过同一套 32 项测试。
+- 分屏尺寸回归已扩展为 Windows `[Console]::WindowHeight` / `WindowWidth` 与 Linux `stty size`，通过真实 PTY/ConPTY 检查缩窄面板后的列数变化。测试目录在应用关闭后清理，并为 Windows 文件句柄释放提供有限重试。
+- 发布门槛：现有四个原生 runner 分别运行服务测试、32 项源码界面测试、匹配架构的安装包构建和32项打包后界面回归。此处记录准备状态，实际原生结果以 [GitHub Actions](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml) 对应 0.3.0 提交为准。
+- 正式发布任务仅在全部原生检查通过后运行，核对 10 个安装包，生成并验证 SHA256SUMS，再上传 [v0.3.0 Release](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)。版本号或 README 更新本身不表示已经发布。
+- Windows 安装包未签名；Windows 10、Fedora、Arch、openSUSE 仍需实机验证。macOS 无安装包或原生验证。以下记录保留当时的验证范围，不代表当前版本状态。
+
+## 2026-10-17：分屏开发分支本地验证（未发布）
+
+基于已发布 0.2.2 的 `feature/split-panes` 开发分支，实现标签页内左右/上下嵌套分屏、独立 PTY、活动面板目录继承、面板焦点切换、拖动和键盘调整分隔线，以及关闭后布局合并。关闭整个标签页统一检查其中所有忙碌面板。分屏布局暂不跨启动保存。
+
+- Debian 13 x64：`npm test` 18 项通过、1 项 Windows 专用测试跳过；`npm run build`、`git diff --check` 通过。
+- 源码应用与 `desktop/dist/linux-unpacked/terminal`：分别完成全部 32 项端到端测试，其中 10 项新增分屏测试。覆盖输入输出和延迟粘贴隔离、目录继承、嵌套布局和比例调节、真实 PTY 行列尺寸、标签切换/重命名、忙碌会话确认、PTY 释放、创建与关闭重叠、跨标签并发关闭及关闭期间切换标签。
+- 新增首项行为测试先在原实现上失败（缺少分屏入口），再通过实现。标题焦点、延迟创建/关闭、跨标签并发关闭的回归测试均先复现失败，再验证修复。延迟测试保留真实 PTY 操作，只延迟服务返回。
+- 修复后台标签隐藏后失去布局尺寸造成的 xterm 渲染回归；保持隐藏终端的布局尺寸。分隔线具备名称、方向、比例、有效受控布局引用和键盘操作，遵循系统减少动画设置。
+- 独立代码审查发现的生命周期、焦点与可访问性问题已修复并复核，无剩余阻碍。[分屏预览](images/desktop-splits.png) 为实际应用截图。
+- 本地打包复用已安装的同版本 Electron：`npm run pack -- --config.electronDist=/home/song/Projects/terminal/desktop/node_modules/electron/dist`。界面/PTY 验证在执行沙箱外进行。
+- 本轮仅验证 Linux x64 的源码与解包应用；未运行本次分屏的 Windows/ARM64 原生 CI，未生成新的安装器，也未发布。已发布的 0.2.2 安装包不含分屏。以下为此前版本记录。
+
 ## 2026-10-17：0.2.2 发布准备与当前四平台 CI 证据
 
 [PR #3](https://github.com/songyekun-614/terminal/pull/3) 的 [GitHub Actions 运行 39013606856](https://github.com/songyekun-614/terminal/actions/runs/39013606856) 已完成；合并后 main 的 [运行 39014235452](https://github.com/songyekun-614/terminal/actions/runs/39014235452) 也在以下四个平台全部通过。该 PR 的 Esc 关闭功能及 shell 就绪等待测试修复已合并为 `f5d695b`；本次将包版本和安装示例更新为 0.2.2，应用与端到端测试代码保持该已审查版本。

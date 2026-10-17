@@ -22,12 +22,272 @@ test.beforeEach(async () => {
     throw error;
   }
 });
+// Split panes must keep real PTYs, focus and layout independent within one tab.
+test("split panes run independent shells and inherit the focused directory", async () => {
+  const folder = path.join(root, "split-directory");
+  fs.mkdirSync(folder);
+  await page.keyboard.type(process.platform === "win32"
+    ? `Set-Location -LiteralPath '${folder.replaceAll("'", "''")}'`
+    : `cd '${folder.replaceAll("'", "'\\''")}'`);
+  await page.keyboard.press("Enter");
+  await waitForIdleTerminal();
+  await page.getByRole("button", { name: "左右分屏", exact: true }).click();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const id = (await page.locator(".terminal-pane.active").getAttribute("id")).slice(9);
+  const cwd = (await page.evaluate(id => window.terminalAPI.sessionInfo(id), id)).cwd;
+  const canonical = directory => {
+    const real = fs.realpathSync(directory);
+    return process.platform === "win32" ? real.toLowerCase() : real;
+  };
+  expect(canonical(cwd)).toBe(canonical(folder));
+  await splitOutput("right");
+  await expect(page.locator(".terminal-pane").first()).not.toContainText("split-right");
+  await page.keyboard.press("Control+Shift+O");
+  await expect(page.locator(".terminal-pane").first().locator("textarea")).toBeFocused();
+  await splitOutput("left");
+  await expect(page.locator(".terminal-pane").nth(1)).not.toContainText("split-left");
+});
+
+test("nested splits resize with pointer and keyboard and collapse on pane close", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const separator = page.getByRole("separator").first();
+  const first = page.locator(".terminal-pane").first();
+  const before = await first.boundingBox();
+  const handle = await separator.boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 80, handle.y + handle.height / 2);
+  await page.mouse.up();
+  await expect.poll(async () => (await first.boundingBox()).width).toBeGreaterThan(before.width + 40);
+  await separator.focus();
+  await separator.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow", "15");
+  await separator.press("End");
+  await expect(separator).toHaveAttribute("aria-valuenow", "85");
+  await separator.press("ArrowLeft");
+  await expect(separator).toHaveAttribute("aria-valuenow", "80");
+  await separator.press("Home");
+  await page.locator(".terminal-pane.active textarea").focus();
+  await page.keyboard.press("Control+Shift+J");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(3);
+  await expect(page.getByRole("separator")).toHaveCount(2);
+  const panes = await page.locator(".terminal-pane").evaluateAll(elements => elements.map(e => {
+    const b = e.getBoundingClientRect(); return { x:b.x, y:b.y, width:b.width, height:b.height };
+  }));
+  expect(Math.abs(panes[1].x - panes[2].x)).toBeLessThan(2);
+  expect(panes[2].y).toBeGreaterThan(panes[1].y + panes[1].height);
+  await waitForIdleTerminal();
+  const closedId = (await page.locator(".terminal-pane.active").getAttribute("id")).slice(9);
+  await page.keyboard.press("Control+Shift+X");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await expect(page.getByRole("separator")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane.active textarea")).toBeFocused();
+  await expect.poll(() => page.evaluate(async id => {
+    try { await window.terminalAPI.sessionInfo(id); return false; } catch { return true; }
+  }, closedId)).toBe(true);
+  await splitOutput("survivor");
+});
+
+test("tabs hide whole split layouts and restore the last focused pane", async () => {
+  await page.getByRole("button", { name: "上下分屏", exact: true }).click();
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const focused = await page.locator(".terminal-pane.active").getAttribute("id");
+  await page.keyboard.press("Control+Shift+T");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
+  await page.getByRole("tab").first().click();
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane.active")).toHaveAttribute("id", focused);
+  await page.getByRole("tab").first().dblclick();
+  await page.getByLabel("标签名称").fill("分屏工作");
+  await page.getByRole("button", { name: "重命名", exact: true }).click();
+  await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
+  await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
+});
+
+test("closing a split tab checks busy background panes once and releases every PTY", async () => {
+  await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 60" : "sleep 60");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "左右分屏", exact: true }).click();
+  await waitForIdleTerminal();
+  const ids = await page.locator(".terminal-pane").evaluateAll(es => es.map(e => e.id.slice(9)));
+  await app.evaluate(({ dialog }) => {
+    global.splitCloseCalls = 0;
+    dialog.showMessageBox = async () => { global.splitCloseCalls++; return { response: 0 }; };
+  });
+  await page.getByRole("button", { name: "关闭标签页", exact: true }).click();
+  await expect.poll(() => app.evaluate(() => global.splitCloseCalls)).toBe(1);
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+  await page.keyboard.press("Control+Shift+W");
+  await expect(page.locator(".terminal-pane")).toHaveCount(1);
+  for (const id of ids) await expect.poll(() => page.evaluate(async id => {
+    try { await window.terminalAPI.sessionInfo(id); return false; } catch { return true; }
+  }, id)).toBe(true);
+});
+
+async function splitOutput(suffix) {
+  await page.keyboard.type(process.platform === "win32"
+    ? `Write-Output ('split-' + '${suffix}')`
+    : `printf '%s\\n' 'split-'${suffix}`);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-pane.active .xterm-screen")).toContainText(`split-${suffix}`);
+}
+
+test("closing while a split session is being created cannot orphan its PTY", async () => {
+  await app.evaluate(({ app }) => {
+    const load = process.getBuiltinModule("module").createRequire(app.getAppPath() + "/package.json");
+    const { Sessions } = load(app.isPackaged ? "./src/sessions.cjs" : "./sessions.cjs");
+    const create = Sessions.prototype.create;
+    Sessions.prototype.create = function (options) {
+      const result = create.call(this, options);
+      global.pendingSplitId = result.id;
+      return new Promise(resolve => { global.finishSplitCreation = () => {
+        Sessions.prototype.create = create;
+        resolve(result);
+      }; });
+    };
+  });
+  await page.getByRole("button", { name: "左右分屏", exact: true }).click();
+  await expect.poll(() => app.evaluate(() => Boolean(global.pendingSplitId))).toBe(true);
+  await page.keyboard.press("Control+Shift+W");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
+  await app.evaluate(() => global.finishSplitCreation());
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane.active textarea")).toBeFocused();
+});
+
+test("clicking a background pane heading moves both typing and paste focus", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  await page.locator(".terminal-pane").first().locator(".pane-heading span").click();
+  await expect(page.locator(".terminal-pane").first().locator("textarea")).toBeFocused();
+  await splitOutput("heading");
+  await expect(page.locator(".terminal-pane").nth(1)).not.toContainText("split-heading");
+});
+
+test("overlapping tab closes preserve a usable terminal while a close is pending", async () => {
+  await page.keyboard.press("Control+Shift+T");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await waitForIdleTerminal();
+  await app.evaluate(({ app }) => {
+    const load = process.getBuiltinModule("module").createRequire(app.getAppPath() + "/package.json");
+    const { Sessions } = load(app.isPackaged ? "./src/sessions.cjs" : "./sessions.cjs");
+    const close = Sessions.prototype.close;
+    global.pendingTabCloses = [];
+    Sessions.prototype.close = function (id) {
+      close.call(this, id);
+      return new Promise(resolve => global.pendingTabCloses.push(resolve));
+    };
+    global.finishTabClose = () => {
+      Sessions.prototype.close = close;
+      for (const resolve of global.pendingTabCloses) resolve();
+    };
+  });
+  await page.keyboard.press("Control+Shift+W");
+  await expect.poll(() => app.evaluate(() => global.pendingTabCloses.length)).toBe(1);
+  await page.getByRole("tab").first().click();
+  await page.keyboard.press("Control+Shift+W");
+  expect(await app.evaluate(() => global.pendingTabCloses.length)).toBe(1);
+  await app.evaluate(() => global.finishTabClose());
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator(".terminal-pane.active textarea")).toBeFocused();
+  await splitOutput("remaining");
+});
+
+test("switching tabs during a pane close preserves the surviving pane selection", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+T");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await page.getByRole("tab").first().click();
+  await app.evaluate(({ app }) => {
+    const load = process.getBuiltinModule("module").createRequire(app.getAppPath() + "/package.json");
+    const { Sessions } = load(app.isPackaged ? "./src/sessions.cjs" : "./sessions.cjs");
+    const close = Sessions.prototype.close;
+    Sessions.prototype.close = function (id) {
+      close.call(this, id);
+      global.pendingPaneClose = true;
+      return new Promise(resolve => { global.finishPaneClose = () => {
+        Sessions.prototype.close = close;
+        resolve();
+      }; });
+    };
+  });
+  await page.keyboard.press("Control+Shift+X");
+  await expect.poll(() => app.evaluate(() => Boolean(global.pendingPaneClose))).toBe(true);
+  await page.getByRole("tab").nth(1).click();
+  const other = await page.locator(".terminal-pane.active").getAttribute("id");
+  await app.evaluate(() => global.finishPaneClose());
+  await expect(page.locator(".terminal-pane")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane.active")).toHaveAttribute("id", other);
+  await page.getByRole("tab").first().click();
+  await expect(page.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".terminal-pane.active textarea")).toBeFocused();
+});
+
+test("a delayed clipboard paste stays in its split pane after focus changes", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const origin = await page.locator(".terminal-pane.active").getAttribute("id");
+  await app.evaluate(({ clipboard }, command) => {
+    clipboard.writeText(command);
+    const read = clipboard.readText.bind(clipboard);
+    clipboard.readText = () => new Promise(resolve => setTimeout(() => resolve(read()), 700));
+  }, process.platform === "win32" ? "Write-Output ('pane-' + 'clipboard')" : "printf '%s\\n' 'pane-'clipboard");
+  await page.keyboard.press("Control+V");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Control+Shift+O");
+  await expect(page.locator(`#${origin} .xterm-screen`)).toContainText("pane-clipboard");
+  await expect(page.locator(".terminal-pane.active .xterm-screen")).not.toContainText("pane-clipboard");
+  await expect(page.locator(".terminal-pane.active textarea")).toBeFocused();
+});
+
+test("resizing a split updates the real PTY dimensions of an unfocused pane", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+O");
+  const pane = page.locator(".terminal-pane.active");
+  const id = await pane.getAttribute("id");
+  const sizeCommand = marker => process.platform === "win32"
+    ? `[Console]::WriteLine(('${marker}-size:' + [Console]::WindowHeight + ' ' + [Console]::WindowWidth))`
+    : `printf '${marker}-size:%s\\n' "$(stty size)"`;
+  await page.keyboard.type(sizeCommand("before"));
+  await page.keyboard.press("Enter");
+  const screen = page.locator(`#${id} .xterm-screen`);
+  await expect(screen).toContainText(/before-size:\d+ \d+/);
+  const before = (await screen.textContent()).match(/before-size:(\d+) (\d+)/);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+O");
+  await page.getByRole("separator").focus();
+  await page.getByRole("separator").press("Home");
+  await page.locator(`#${id} textarea`).focus();
+  // Wait on the actual terminal viewport, rather than a timer, before querying the PTY.
+  await expect.poll(async () => (await page.locator(`#${id}`).boundingBox()).width).toBeLessThan(250);
+  await page.keyboard.type(sizeCommand("after"));
+  await page.keyboard.press("Enter");
+  await expect(screen).toContainText(/after-size:\d+ \d+/);
+  const after = (await screen.textContent()).match(/after-size:(\d+) (\d+)/);
+  expect(Number(after[2])).toBeLessThan(Number(before[2]));
+});
 test.afterEach(async () => {
   if (app) {
     await app.evaluate(({dialog})=>{dialog.showMessageBox=async()=>({response:1});}).catch(()=>{});
     await app.close();
   }
-  fs.rmSync(root, { recursive: true, force: true });
+  await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
 test("Ctrl+V pastes clipboard text once into the real shell", async () => {

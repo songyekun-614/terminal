@@ -3,9 +3,11 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { palette, profiles, presets, color } from "./appearance.js";
 import { installPrompt, recolorPrompt } from "./prompt.js";
+import { splitLayout, removePaneLayout } from "./splits.js";
 const api = window.terminalAPI,
   $ = (id) => document.getElementById(id),
   sessions = new Map(),
+  tabs = new Map(),
   earlyOutput = new Map();
 let settings,
   bootstrap,
@@ -18,6 +20,7 @@ let settings,
 const bytes = new TextEncoder();
 let savedFontSize = 12;
 let escapePending = false;
+let closingLayout = false;
 function error(err) {
   $("status").textContent = `错误：${err.message || err}`;
 }
@@ -70,14 +73,50 @@ async function pasteClipboard() {
     if (s === current()) s.term.focus();
   });
 }
-function fit(s = current()) {
-  if (!s || s.id !== active || s.exited) return;
+function fit(s) {
+  if (!s) {
+    for (const pane of sessions.values()) fit(pane);
+    return;
+  }
+  if (s.owner.root.hidden || s.exited) return;
   try {
     s.fit.fit();
     api.resize(s.id, s.term.cols, s.term.rows).catch(error);
-  } catch (err) {
-    error(err);
+  } catch (err) { error(err); }
+}
+let fitFrame;
+function scheduleFit() {
+  cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => fit());
+}
+const paneResize = new ResizeObserver(scheduleFit);
+function tabFor(id) { return tabs.get(id) || sessions.get(id)?.owner; }
+function updateTitle(group) {
+  const pane = sessions.get(group.active);
+  group.tab.textContent = group.custom || pane?.autoTitle || pane?.label || "终端";
+}
+function focusPane(id, focus = true) {
+  const pane = sessions.get(id);
+  if (!pane) return;
+  active = id;
+  pane.owner.active = id;
+  for (const group of tabs.values()) {
+    const selected = group === pane.owner;
+    group.root.hidden = !selected;
+    group.wrap.classList.toggle("selected", selected);
+    group.tab.setAttribute("aria-selected", String(selected));
+    group.tab.tabIndex = selected ? 0 : -1;
   }
+  for (const s of sessions.values()) s.pane.classList.toggle("active", s.id === id);
+  updateTitle(pane.owner);
+  scheduleFit();
+  if (focus) pane.term.focus();
+}
+function nextPane() {
+  const group = current()?.owner;
+  if (!group) return;
+  const ids = [...group.root.querySelectorAll(".terminal-pane")].map(el => el.id.slice(9));
+  focusPane(ids[(ids.indexOf(active) + 1) % ids.length]);
 }
 function apply(value) {
   settings = { ...value };
@@ -108,154 +147,223 @@ function apply(value) {
   requestAnimationFrame(() => fit());
 }
 function switchTab(id) {
-  active = id;
-  for (const s of sessions.values()) {
-    s.pane.classList.toggle("active", s.id === id);
-    s.wrap.classList.toggle("selected", s.id === id);
-    s.tab.setAttribute("aria-selected", String(s.id === id));
-    s.tab.tabIndex = s.id === id ? 0 : -1;
+  const group = tabFor(id);
+  if (group && !group.closing) focusPane(group.active);
+}
+async function busy(panes) {
+  const states = await Promise.all(panes.map(async s => {
+    if (s.exited) return false;
+    try { return (await api.sessionInfo(s.id)).busy; }
+    catch (err) { if (s.exited) return false; throw err; }
+  }));
+  return states.some(Boolean);
+}
+async function disposePane(s) {
+  if (!s.exited) {
+    try { await api.closeSession(s.id); }
+    catch (err) { if (!s.exited) throw err; }
   }
-  fit();
-  current()?.term.focus();
+  paneResize.unobserve(s.content);
+  s.term.dispose();
+  sessions.delete(s.id);
+  s.owner.panes.delete(s.id);
 }
 async function closeTab(id, { closeWindow = false } = {}) {
+  const group = tabFor(id);
+  if (!group || group.closing || creating || closingLayout) return;
+  closingLayout = true;
+  group.closing = true;
+  try {
+    if (closeWindow && tabs.size === 1) {
+      await api.windowAction("close");
+      return;
+    }
+    const panes = [...group.panes].map(id => sessions.get(id));
+    if (await busy(panes) && !(await api.confirmClose())) return;
+    for (const pane of panes) await disposePane(pane);
+    const selected = panes.some(pane => pane.id === active);
+    group.root.remove();
+    group.wrap.remove();
+    tabs.delete(group.id);
+    if (selected) {
+      const next = tabs.keys().next().value;
+      if (next) switchTab(next);
+      else { active = null; await newTab(); }
+    }
+  } finally { group.closing = false; closingLayout = false; }
+}
+async function closePane(id = active, { closeWindow = false } = {}) {
   const s = sessions.get(id);
-  if (!s) return;
-  if (closeWindow && sessions.size === 1) {
-    await api.windowAction("close");
-    return;
-  }
-  const info = s.exited ? { busy: false } : await api.sessionInfo(id);
-  if (info.busy && !(await api.confirmClose())) return;
-  if (!s.exited) await api.closeSession(id);
-  s.term.dispose();
-  s.pane.remove();
-  s.wrap.remove();
-  sessions.delete(id);
-  if (active === id) {
-    const next = sessions.keys().next().value;
-    if (next) switchTab(next);
-    else await newTab();
-  }
+  if (!s || s.owner.closing || creating || closingLayout) return;
+  if (s.owner.panes.size === 1) return closeTab(s.owner.id, { closeWindow });
+  closingLayout = true;
+  const group = s.owner;
+  group.closing = true;
+  try {
+    if (await busy([s]) && !(await api.confirmClose())) return;
+    const ids = [...group.root.querySelectorAll(".terminal-pane")].map(el => el.id.slice(9));
+    const next = ids[ids.indexOf(id) + 1] || ids[ids.indexOf(id) - 1];
+    await disposePane(s);
+    removePaneLayout(s.pane);
+    group.root.classList.toggle("has-splits", group.panes.size > 1);
+    if (group.active === id) group.active = next;
+    if (active === id) focusPane(next);
+    updateTitle(group);
+    scheduleFit();
+  } finally { group.closing = false; closingLayout = false; }
 }
 function renameTab(id) {
-  renamed = id;
-  $("tab-name").value = sessions.get(id).tab.textContent;
+  const group = tabFor(id);
+  if (!group) return;
+  renamed = group.id;
+  $("tab-name").value = group.tab.textContent;
   $("rename").showModal();
   $("tab-name").select();
 }
-async function newTab() {
-  const parent = current();
+let creating = false;
+async function createPane(group, parent = current(), direction) {
   let cwd = parent?.cwd;
-  if (parent) {
-    try {
-      cwd = (await api.sessionInfo(parent.id)).cwd || cwd;
-    } catch {}
+  if (parent && !parent.exited) {
+    try { cwd = (await api.sessionInfo(parent.id)).cwd || cwd; } catch {}
   }
-  const info = await api.createSession({
-    cwd,
-    shell: settings.shell,
-    cols: 80,
-    rows: 24,
-  });
+  const info = await api.createSession({ cwd, shell: settings.shell, cols: 80, rows: 24 });
+  if (tabs.get(group.id) !== group || (direction && sessions.get(parent.id) !== parent)) {
+    await api.closeSession(info.id);
+    earlyOutput.delete(info.id);
+    return;
+  }
   const pane = document.createElement("section");
   pane.className = "terminal-pane";
-  pane.setAttribute("role", "tabpanel");
+  pane.setAttribute("role", "group");
+  pane.setAttribute("aria-label", "终端面板");
   pane.id = `terminal-${info.id}`;
-  $("terminals").append(pane);
+  const heading = document.createElement("div");
+  heading.className = "pane-heading";
+  const title = document.createElement("span");
+  title.textContent = info.label;
+  const close = document.createElement("button");
+  close.textContent = "×";
+  close.setAttribute("aria-label", "关闭此面板");
+  close.title = "关闭此面板 · Ctrl+Shift+X";
+  heading.append(title, close);
+  const content = document.createElement("div");
+  content.className = "terminal-content";
+  pane.append(heading, content);
+  if (direction) splitLayout(parent.pane, pane, direction, scheduleFit);
+  else group.root.append(pane);
   const term = new Terminal({
-    allowTransparency: true,
-    theme: palette(settings),
-    fontFamily: settings.font_family,
-    fontSize: Number(settings.font_size),
-    cursorBlink: true,
-    scrollback: 10000,
+    allowTransparency: true, theme: palette(settings),
+    fontFamily: settings.font_family, fontSize: Number(settings.font_size),
+    cursorBlink: true, scrollback: 10000,
   });
-  const fitAddon = new FitAddon(),
-    search = new SearchAddon();
+  const fitAddon = new FitAddon(), search = new SearchAddon();
   term.loadAddon(fitAddon);
   term.loadAddon(search);
-  term.open(pane);
+  term.open(content);
+  const s = { ...info, term, fit: fitAddon, search, pane, content, paneTitle: title, owner: group };
+  sessions.set(info.id, s);
+  group.panes.add(info.id);
+  group.root.classList.toggle("has-splits", group.panes.size > 1);
+  installPrompt(s);
+  for (const data of earlyOutput.get(info.id) || [])
+    term.write(data, () => api.ack(info.id, bytes.encode(data).length).catch(error));
+  earlyOutput.delete(info.id);
+  term.onData(data => {
+    if (data.includes("\r")) s.idle = false;
+    if (s.clipboardInput) s.clipboardInput.push(data);
+    else if (s.inputQueue) enqueueInput(s, () => api.write(info.id, data));
+    else api.write(info.id, data).catch(error);
+  });
+  term.onTitleChange(title => {
+    s.autoTitle = title.trim().slice(0, 80) || s.label;
+    s.paneTitle.textContent = s.autoTitle;
+    if (group.active === s.id) updateTitle(group);
+  });
+  pane.onpointerdown = event => {
+    if (event.target.closest("button")) return;
+    if (event.target.closest(".pane-heading")) {
+      event.preventDefault();
+      focusPane(s.id);
+    } else focusPane(s.id, false);
+  };
+  content.addEventListener("focusin", () => { if (active !== s.id) focusPane(s.id, false); });
+  close.onclick = guard(() => closePane(s.id));
+  term.attachCustomKeyEventHandler(event => !(
+    event.type === "keydown" && event.ctrlKey &&
+    ((event.shiftKey && ["C", "V", "T", "W", "F", "R", "H", "J", "O", "X"].includes(event.key.toUpperCase())) ||
+     ["PageUp", "PageDown", ",", "+", "=", "-", "0"].includes(event.key))
+  ));
+  paneResize.observe(content);
+  focusPane(info.id);
+  apply(settings);
+  return s;
+}
+async function splitPane(direction) {
+  const parent = current();
+  if (!parent || creating || parent.owner.closing) return;
+  let depth = 0;
+  for (let node = parent.pane.parentElement; node !== parent.owner.root; node = node.parentElement) depth++;
+  if (depth >= 8) throw Error("最多嵌套 8 层分屏");
+  const box = parent.pane.getBoundingClientRect();
+  if ((direction === "horizontal" ? box.width : box.height) < 240)
+    throw Error("面板空间不足，请先调整分隔线或放大窗口");
+  creating = true;
+  try { await createPane(parent.owner, parent, direction); }
+  finally { creating = false; }
+}
+async function newTab() {
+  if (creating) return;
+  creating = true;
+  const parent = current();
+  const root = document.createElement("div");
+  root.className = "terminal-tab";
+  root.setAttribute("role", "tabpanel");
+  const id = crypto.randomUUID();
+  root.id = `tab-${id}`;
+  root.hidden = true;
+  $("terminals").append(root);
   const wrap = document.createElement("div");
   wrap.className = "tab-wrap";
   wrap.draggable = true;
   const tab = document.createElement("button");
+  tab.id = `tab-label-${id}`;
   tab.setAttribute("role", "tab");
-  tab.setAttribute("aria-controls", pane.id);
-  tab.textContent = info.label;
+  tab.setAttribute("aria-controls", root.id);
+  root.setAttribute("aria-labelledby", tab.id);
   const close = document.createElement("button");
   close.className = "tab-close";
   close.textContent = "×";
   close.setAttribute("aria-label", "关闭标签页");
   wrap.append(tab, close);
   $("tabs").append(wrap);
-  const s = {
-    ...info,
-    term,
-    fit: fitAddon,
-    search,
-    pane,
-    wrap,
-    tab,
-    custom: false,
-  };
-  sessions.set(info.id, s);
-  installPrompt(s);
-  for (const data of earlyOutput.get(info.id) || [])
-    term.write(data, () =>
-      api.ack(info.id, bytes.encode(data).length).catch(error),
-    );
-  earlyOutput.delete(info.id);
-  term.onData((data) => {
-    if (data.includes("\r")) s.idle = false;
-    if (s.clipboardInput) s.clipboardInput.push(data);
-    else if (s.inputQueue) enqueueInput(s, () => api.write(info.id, data));
-    else api.write(info.id, data).catch(error);
-  });
-  term.onTitleChange((title) => {
-    s.autoTitle = title.trim().slice(0, 80) || s.label;
-    if (!s.custom) tab.textContent = s.autoTitle;
-  });
-  tab.onclick = () => switchTab(info.id);
-  tab.ondblclick = () => renameTab(info.id);
-  tab.onkeydown = (event) => {
-    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+  const group = { id, root, wrap, tab, panes: new Set(), active: null, custom: "" };
+  tabs.set(id, group);
+  tab.onclick = () => switchTab(id);
+  tab.ondblclick = () => renameTab(id);
+  tab.onkeydown = event => {
+    if (["ArrowRight", "ArrowLeft"].includes(event.key)) {
       event.preventDefault();
-      const ids = [...$("tabs").children].map(
-        (el) => [...sessions.values()].find((s) => s.wrap === el)?.id,
-      );
-      switchTab(
-        ids[
-          (ids.indexOf(info.id) +
-            (event.key === "ArrowRight" ? 1 : -1) +
-            ids.length) %
-            ids.length
-        ],
-      );
+      const ids = tabOrder();
+      switchTab(ids[(ids.indexOf(id) + (event.key === "ArrowRight" ? 1 : -1) + ids.length) % ids.length]);
     }
-    if (event.key === "F2") renameTab(info.id);
+    if (event.key === "F2") renameTab(id);
   };
-  close.onclick = guard(() => closeTab(info.id));
-  wrap.ondragstart = () => {
-    drag = wrap;
-  };
-  wrap.ondragover = (e) => e.preventDefault();
-  wrap.ondrop = (e) => {
+  close.onclick = guard(() => closeTab(id));
+  wrap.ondragstart = () => { drag = wrap; };
+  wrap.ondragover = e => e.preventDefault();
+  wrap.ondrop = e => {
     e.preventDefault();
-    if (drag && drag !== wrap) $("tabs").insertBefore(drag, wrap);
+    if (drag && drag !== wrap && drag.parentElement === $("tabs")) $("tabs").insertBefore(drag, wrap);
   };
-  term.attachCustomKeyEventHandler(
-    (event) =>
-      !(
-        event.type === "keydown" &&
-        event.ctrlKey &&
-        ((event.shiftKey &&
-          ["C", "V", "T", "W", "F", "R"].includes(event.key.toUpperCase())) ||
-          ["PageUp", "PageDown", ",", "+", "=", "-", "0"].includes(event.key))
-      ),
-  );
-  switchTab(info.id);
-  apply(settings);
+  try { await createPane(group, parent); }
+  catch (err) {
+    root.remove(); wrap.remove(); tabs.delete(id);
+    if (parent) focusPane(parent.id);
+    throw err;
+  } finally { creating = false; }
+}
+function tabOrder() {
+  return [...$("tabs").children].map(el => [...tabs.values()].find(group => group.wrap === el)?.id).filter(Boolean);
 }
 api.onOutput(({ id, data }) => {
   const s = sessions.get(id);
@@ -276,7 +384,9 @@ api.onExit(({ id, exitCode }) => {
     s.exited = true;
     s.idle = false;
     s.term.write(`\r\n[进程已退出：${exitCode}]\r\n`);
-    s.tab.textContent += " · 已退出";
+    s.autoTitle = (s.autoTitle || s.label) + " · 已退出";
+    s.paneTitle.textContent = s.autoTitle;
+    if (s.owner.active === s.id) updateTitle(s.owner);
   }
 });
 $("new").onclick = guard(newTab);
@@ -289,11 +399,11 @@ for (const action of ["close", "minimize", "maximize"])
   );
 $("rename").addEventListener("close", () => {
   if ($("rename").returnValue === "save") {
-    const s = sessions.get(renamed);
+    const group = tabs.get(renamed);
     const title = $("tab-name").value.trim();
-    if (s) {
-      s.custom = Boolean(title);
-      s.tab.textContent = title || s.autoTitle || s.label;
+    if (group) {
+      group.custom = title;
+      updateTitle(group);
     }
   }
   current()?.term.focus();
@@ -318,7 +428,7 @@ $("search-prev").onclick = () => search(true);
 function hideSearch() {
   $("search").hidden = true;
   $("status").textContent = "";
-  current()?.search.clearDecorations();
+  for (const s of sessions.values()) s.search.clearDecorations();
   current()?.term.focus();
 }
 $("search-close").onclick = hideSearch;
@@ -477,7 +587,7 @@ document.addEventListener(
           $("menu").hidePopover();
           current()?.term.focus();
         } else if (!$("search").hidden) hideSearch();
-        else if (active) await closeTab(active, { closeWindow: true });
+        else if (active) await closePane(active, { closeWindow: true });
       } finally {
         escapePending = false;
       }
@@ -504,17 +614,8 @@ document.addEventListener(
     if (event.ctrlKey && (!event.shiftKey || event.key === "+")) {
       if (["PageUp", "PageDown"].includes(event.key)) {
         event.preventDefault();
-        const ids = [...$("tabs").children].map(
-          (el) => [...sessions.values()].find((s) => s.wrap === el)?.id,
-        );
-        switchTab(
-          ids[
-            (ids.indexOf(active) +
-              (event.key === "PageDown" ? 1 : -1) +
-              ids.length) %
-              ids.length
-          ],
-        );
+        const ids = tabOrder();
+        switchTab(ids[(ids.indexOf(current()?.owner.id) + (event.key === "PageDown" ? 1 : -1) + ids.length) % ids.length]);
         return;
       }
       if (event.key === ",") {
@@ -541,7 +642,18 @@ document.addEventListener(
       }
     }
     if (!event.ctrlKey || !event.shiftKey) return;
-    if (["T", "W", "F", "R"].includes(key)) event.preventDefault();
+    if (["T", "W", "F", "R", "H", "J", "O", "X"].includes(key)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (["H", "J", "O", "X"].includes(key)) {
+      if (event.repeat || event.altKey || event.metaKey || event.isComposing) return;
+      if (key === "H") await splitPane("horizontal");
+      if (key === "J") await splitPane("vertical");
+      if (key === "O") nextPane();
+      if (key === "X") await closePane();
+      return;
+    }
     if (key === "R" && active) renameTab(active);
     if (key === "T") await newTab();
     if (key === "W" && active) await closeTab(active);
@@ -549,7 +661,10 @@ document.addEventListener(
   }),
   true,
 );
-new ResizeObserver(() => fit()).observe($("terminals"));
+$("split-horizontal").onclick = guard(() => splitPane("horizontal"));
+$("split-vertical").onclick = guard(() => splitPane("vertical"));
+$("next-pane").onclick = nextPane;
+new ResizeObserver(scheduleFit).observe($("terminals"));
 guard(async () => {
   bootstrap = await api.bootstrap();
   settings = bootstrap.settings;
