@@ -17,6 +17,7 @@ let settings,
   preferencesEpoch = 0;
 const bytes = new TextEncoder();
 let savedFontSize = 12;
+let escapePending = false;
 function error(err) {
   $("status").textContent = `错误：${err.message || err}`;
 }
@@ -117,9 +118,13 @@ function switchTab(id) {
   fit();
   current()?.term.focus();
 }
-async function closeTab(id) {
+async function closeTab(id, { closeWindow = false } = {}) {
   const s = sessions.get(id);
   if (!s) return;
+  if (closeWindow && sessions.size === 1) {
+    await api.windowAction("close");
+    return;
+  }
   const info = s.exited ? { busy: false } : await api.sessionInfo(id);
   if (info.busy && !(await api.confirmClose())) return;
   if (!s.exited) await api.closeSession(id);
@@ -388,6 +393,7 @@ $("background-preset").onchange = () => {
 $("settings-cancel").onclick = () => {
   $("settings").close("cancel");
 };
+$("about").addEventListener("close", () => current()?.term.focus());
 $("settings").addEventListener(
   "close",
   guard(async () => {
@@ -456,8 +462,25 @@ $("menu").onclick = guard(async (event) => {
 document.addEventListener(
   "keydown",
   guard(async (event) => {
-    if (event.key === "Escape" && !$("search").hidden) {
-      hideSearch();
+    if (
+      event.key === "Escape" && !event.ctrlKey && !event.altKey &&
+      !event.metaKey && !event.shiftKey && !event.isComposing
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat || escapePending) return;
+      escapePending = true;
+      try {
+        const dialog = document.querySelector("dialog[open]");
+        if (dialog) dialog.close("cancel");
+        else if ($("menu").matches(":popover-open")) {
+          $("menu").hidePopover();
+          current()?.term.focus();
+        } else if (!$("search").hidden) hideSearch();
+        else if (active) await closeTab(active, { closeWindow: true });
+      } finally {
+        escapePending = false;
+      }
       return;
     }
     if (document.querySelector("dialog[open]")) return;

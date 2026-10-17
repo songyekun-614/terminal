@@ -57,6 +57,12 @@ Linux 继续读取 `~/.config/mac-style-terminal/settings.json` 和已有壁纸�
 
 终端支持 `Ctrl+Shift+C` / `Ctrl+Shift+V` 和右上角“更多操作”中的复制、粘贴、全选。也可用 `Ctrl+V` 粘贴；`Ctrl+C` 在选中文字时复制，没有选区时中断当前命令。没有选区的复制操作保留剪贴板原内容。菜单操作完成后焦点返回终端，可以直接继续输入或按 Enter。搜索框、设置和重命名输入框使用原生 `Ctrl+C` / `Ctrl+V`。
 
+## Esc 关闭
+
+单独按 `Esc` 时，先取消最上层的设置、重命名、关于窗口或菜单；没有弹窗和菜单时关闭搜索栏，再次按下关闭当前标签页。关闭最后一个标签页会退出整个终端。有命令运行时会要求确认，取消则保留会话。取消外观设置会恢复预览前的外观，关闭弹窗或搜索后可继续在终端输入。长按 Esc 不会连续关闭多个标签页。
+
+Esc 用于应用关闭操作；在 Vim 等依赖 Esc 的终端程序中也会触发关闭确认。
+
 ## 从源码构建和验证
 
 需要 Node.js 22、npm、Python 和本平台的 C++ 编译工具。Linux 使用 build-essential 和 rpm；Windows 使用 Visual Studio Build Tools 的 C++ 桌面工具与 Windows SDK，ARM64 构建需要 ARM64 工具链。各架构在对应原生机器构建，Windows 包也在 Windows 构建。
