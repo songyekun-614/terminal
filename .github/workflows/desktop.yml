@@ -144,9 +144,9 @@ jobs:
           cat > release-notes.md <<'NOTES'
           Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
 
-          - 修复 Linux 从桌面启动时未将 GNOME 手动代理传给 shell 的问题，避免 Codex 等命令行程序直连超时。
-          - 自动继承 HTTP、HTTPS、SOCKS 代理与绕过地址，保留用户已有代理变量的优先级，不修改 shell 或系统配置。
-          - 补充旧 Codex 后台服务的恢复说明及真实 PTY 回归测试。
+          - 支持单独按 Esc 依次取消弹窗、菜单与搜索栏，再关闭当前标签页；最后一个标签页关闭时退出窗口。
+          - 忙碌会话保留关闭确认；长按 Esc 或确认等待期间重复按键不会连续关闭标签页。当前 Esc 也会拦截 Vim 等终端程序的同名按键。
+          - 修复界面测试启动竞态：输入前等待真实 shell 就绪，避免 Linux ARM64 等平台在提示符初始化前输入导致测试失败。
           - 四个平台均完成服务测试、界面测试和打包后回归测试。
 
           下载与系统架构一致的文件：Windows 使用 setup.exe 或 zip；Debian / Ubuntu 使用 deb；Fedora / openSUSE 使用 rpm；其他 Linux 桌面可使用 AppImage。

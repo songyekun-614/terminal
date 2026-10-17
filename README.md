@@ -10,7 +10,7 @@
 
 推荐从 [GitHub Releases](https://github.com/songyekun-614/terminal/releases/latest) 的 **Assets** 下载对应系统和架构的安装包。Release 同时提供 `SHA256SUMS` 校验文件；页面自动生成的 Source code 压缩包是源码，不是安装包。
 
-也可打开 [GitHub Actions 构建列表](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml)，选择成功的构建，在页面底部 **Artifacts** 下载对应系统和架构的压缩包，然后解压。下载 Actions 产物需要登录 GitHub，产物有保存期限。[已通过四个平台验证的构建](https://github.com/songyekun-614/terminal/actions/runs/38549092618)提供以下产物：
+也可打开 [GitHub Actions 构建列表](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml)，选择成功的构建，在页面底部 **Artifacts** 下载对应系统和架构的压缩包，然后解压。下载 Actions 产物需要登录 GitHub，产物有保存期限。[已通过四个平台验证的构建](https://github.com/songyekun-614/terminal/actions/runs/39014235452)提供以下产物：
 
 | 系统 | Actions 产物 | 包内文件 |
 | --- | --- | --- |
@@ -21,15 +21,15 @@
 
 Windows 在“设置 → 系统 → 系统信息（关于）→ 系统类型”查看架构：Intel / AMD 的 64 位电脑选择 `x64`，ARM 电脑选择 `arm64`。Linux 运行 `uname -m`：`x86_64` 对应 `x64`，`aarch64` 对应 `arm64`。目前提供这两种架构。
 
-以下命令以 **0.2.1 x64** 安装包为例，在下载文件所在目录执行；Windows ARM64 用户将文件名中的 `x64` 换成 `arm64`；Linux ARM64 的 AppImage/deb 使用 `arm64`，rpm 使用 `aarch64`。Linux x64 的 AppImage/rpm 使用 `x86_64`，deb 使用 `amd64`。其他版本按实际文件名修改。
+以下命令以 **0.2.2 x64** 安装包为例，在下载文件所在目录执行；Windows ARM64 用户将文件名中的 `x64` 换成 `arm64`；Linux ARM64 的 AppImage/deb 使用 `arm64`，rpm 使用 `aarch64`。Linux x64 的 AppImage/rpm 使用 `x86_64`，deb 使用 `amd64`。其他版本按实际文件名修改。
 
 ### Windows
 
 1. 从 Release 下载对应架构的安装器；使用 Actions 产物时先解压外层压缩包。
-2. 双击 `terminal-0.2.1-windows-x64-setup.exe`，按提示选择安装目录。安装到当前用户，无需管理员权限。
+2. 双击 `terminal-0.2.2-windows-x64-setup.exe`，按提示选择安装目录。安装到当前用户，无需管理员权限。
 3. 从开始菜单或桌面快捷方式启动 **terminal**。默认使用已安装的 PowerShell 7，否则使用 Windows PowerShell；可在外观设置中选择 cmd。
 
-也可使用 zip 版本：解压下载的 `terminal-0.2.1-windows-x64.zip` 到当前用户可写的目录，双击其中的 `terminal.exe`。设置仍保存在用户配置目录。
+也可使用 zip 版本：解压下载的 `terminal-0.2.2-windows-x64.zip` 到当前用户可写的目录，双击其中的 `terminal.exe`。设置仍保存在用户配置目录。
 
 当前安装包未签名，Windows 可能显示 SmartScreen 提示。请核对文件来自本仓库构建。兼容性目标为 Windows 10 x64 1809+、ARM64 1903+ 和 Windows 11；原生 CI 已验证 Windows Server 2022 x64 与 Windows 11 ARM64，Windows 10 尚未实机验证。
 
@@ -40,7 +40,7 @@ Windows 在“设置 → 系统 → 系统信息（关于）→ 系统类型”�
 推荐使用 deb 包，由包管理器安装所需运行库：
 
 ```bash
-sudo apt install ./terminal-0.2.1-linux-amd64.deb
+sudo apt install ./terminal-0.2.2-linux-amd64.deb
 terminal
 ```
 
@@ -51,14 +51,14 @@ terminal
 Fedora：
 
 ```bash
-sudo dnf install ./terminal-0.2.1-linux-x86_64.rpm
+sudo dnf install ./terminal-0.2.2-linux-x86_64.rpm
 terminal
 ```
 
 openSUSE：
 
 ```bash
-sudo zypper install ./terminal-0.2.1-linux-x86_64.rpm
+sudo zypper install ./terminal-0.2.2-linux-x86_64.rpm
 terminal
 ```
 
@@ -69,14 +69,14 @@ terminal
 使用对应架构的 AppImage，以普通桌面用户启动：
 
 ```bash
-chmod +x terminal-0.2.1-linux-x86_64.AppImage
-./terminal-0.2.1-linux-x86_64.AppImage
+chmod +x terminal-0.2.2-linux-x86_64.AppImage
+./terminal-0.2.2-linux-x86_64.AppImage
 ```
 
 AppImage 可能需要 FUSE 2 兼容库（Ubuntu 22.04 为 `libfuse2`，Ubuntu 24.04 为 `libfuse2t64`）。没有 FUSE 时，可解压运行：
 
 ```bash
-./terminal-0.2.1-linux-x86_64.AppImage --appimage-extract
+./terminal-0.2.2-linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
