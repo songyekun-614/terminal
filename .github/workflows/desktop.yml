@@ -107,6 +107,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: terminal-*
@@ -133,14 +135,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          REFRESH_030: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[refresh-v0.3.0]') }}
         run: |
           set -euo pipefail
           version=$(node -p "require('./desktop/package.json').version")
           tag="v${version}"
+          refresh=false
+          if [[ "$REFRESH_030" == 'true' ]]; then
+            [[ "$version" == '0.3.0' ]] || { echo 'Refresh is restricted to 0.3.0' >&2; exit 1; }
+            refresh=true
+          fi
           existing_tag=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${tag}" --jq ".[] | select(.ref == \"refs/tags/${tag}\") | .ref")
           if [[ -n "$existing_tag" ]]; then
             tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
-            [[ "$tag_sha" == "$GITHUB_SHA" ]] || { echo 'Release tag points to different source' >&2; exit 1; }
+            if [[ "$tag_sha" != "$GITHUB_SHA" ]]; then
+              [[ "$refresh" == 'true' && "$tag_sha" == '94d218860edda415657bcfa4daf0a7bd5b821d68' ]] || { echo 'Release tag points to different source' >&2; exit 1; }
+              git merge-base --is-ancestor "$tag_sha" "$GITHUB_SHA" || {
+                git fetch --no-tags origin "$tag_sha"
+                git merge-base --is-ancestor "$tag_sha" "$GITHUB_SHA"
+              }
+            fi
           fi
           cat > release-notes.md <<'NOTES'
           Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
@@ -148,7 +162,10 @@ jobs:
           - 新增左右/上下嵌套分屏；每个面板运行独立 shell，新面板继承当前面板目录。
           - 支持点击与快捷键切换面板、拖动或键盘调整分隔线，关闭面板后自动合并布局。
           - 复制、粘贴与搜索作用于当前面板；延迟粘贴保留原面板归属，标签切换不会抢回焦点。
-          - 关闭标签页检查全部面板的运行状态，保留忙碌会话确认，并修复异步创建/关闭与焦点切换竞态。
+          - 采用 B 版分屏：12px 圆角、2px 接缝、12px 拖动区域；修复细接缝抓取与拖动跳变。
+          - 关闭任何标签页及退出窗口始终确认，包括空闲会话；单独关闭忙碌面板时确认。
+          - 修复标签过多时工具栏遮挡，以及重命名后的输入焦点和中文输入切换问题。
+          - 修复异步创建/关闭与焦点切换竞态，保留已有字体及原生确认窗口样式。
           - Ctrl+Shift+H 左右分屏，Ctrl+Shift+J 上下分屏，Ctrl+Shift+O 切换面板，Ctrl+Shift+X 关闭面板。
           - Esc 优先取消弹窗、菜单和搜索，再关闭当前面板；最后一个标签页的最后一个面板关闭时退出。Esc 仍会拦截 Vim 等终端程序的同名按键。
           - 保留已有外观与代理设置；分屏布局暂不跨启动保存。
@@ -160,9 +177,17 @@ jobs:
           NOTES
           printf '\n源码提交：%s\n构建记录：https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
           if gh release view "$tag" --json isDraft,targetCommitish > existing-release.json 2>/dev/null; then
-            node -e "const r=require('./existing-release.json'); if (!r.isDraft || r.targetCommitish !== process.env.GITHUB_SHA) throw Error('Refusing to replace an existing release');"
+            if [[ "$refresh" != 'true' ]]; then
+              node -e "const r=require('./existing-release.json'); if (!r.isDraft || r.targetCommitish !== process.env.GITHUB_SHA) throw Error('Refusing to replace an existing release');"
+            else
+              # All four native builds and checksum validation have passed.
+              # Re-read immediately before moving the existing tag; never force it.
+              current_tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
+              [[ "$current_tag_sha" == "$tag_sha" ]] || { echo 'Release tag changed during refresh' >&2; exit 1; }
+              gh api --method PATCH "repos/${GH_REPO}/git/refs/tags/${tag}" -f sha="$GITHUB_SHA" -F force=false
+            fi
           else
             gh release create "$tag" --target "$GITHUB_SHA" --draft --title "terminal ${version}" --notes-file release-notes.md
           fi
           gh release upload "$tag" release-assets/* --clobber
-          gh release edit "$tag" --draft=false --latest
+          gh release edit "$tag" --target "$GITHUB_SHA" --title "terminal ${version}" --notes-file release-notes.md --draft=false --latest
