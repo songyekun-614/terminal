@@ -2,6 +2,39 @@
 
 一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。SSH 暂停开发。
 
+当前正式版本为 **[0.3.0](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)**，已发布 Windows / Linux 的 x64、ARM64 安装包，共 10 个文件及 `SHA256SUMS`。
+
+## 分屏与常用操作
+
+打开 terminal，点击标签栏下方的“左右分屏”或“上下分屏”，也可使用以下快捷键：
+
+| 操作 | 快捷键 |
+| --- | --- |
+| 左右分屏 | Ctrl+Shift+H |
+| 上下分屏 | Ctrl+Shift+J |
+| 切换到下一个面板 | Ctrl+Shift+O |
+| 关闭当前面板 | Ctrl+Shift+X |
+| 新建标签页 | Ctrl+Shift+T |
+| 关闭整个标签页 | Ctrl+Shift+W |
+| 搜索当前面板 | Ctrl+Shift+F |
+| 外观设置 | Ctrl+, |
+
+每个面板运行独立 shell，新面板继承当前面板的目录。点击面板切换输入焦点，拖动分隔线调整大小；可继续嵌套分屏，关闭面板后剩余面板自动填补空间。复制、粘贴和搜索作用于当前面板，配色、字体和壁纸设置应用于所有面板。
+
+![terminal 左右与上下嵌套分屏](docs/images/desktop-splits.png)
+
+`Ctrl+V` 可直接粘贴；`Ctrl+C` 在有文字选区时复制，没有选区时中断命令。也支持 `Ctrl+Shift+C` / `Ctrl+Shift+V`。
+
+`Esc` 优先取消弹窗、菜单或搜索，再关闭当前面板；关闭忙碌会话时会要求确认。当前 Esc 也会拦截 Vim 等程序的同名按键。分屏布局仅在本次运行期间保留，重启后不会恢复。更多分隔线键盘操作及使用限制见[分屏说明](docs/cross-platform.md#分屏)。
+
+## 发布与验证
+
+0.3.0 的[发布工作流](https://github.com/songyekun-614/terminal/actions/runs/39047315655)已在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境完成服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，并正式发布。
+
+本地 Debian 13 x64 的源码、打包应用和安装后的应用分别通过全部 **32 项界面测试**；服务测试 18 项通过、1 项 Windows 专用测试跳过。详情见[交付核实记录](docs/2026-10-18-delivery-verification.md)与[跨平台验证记录](docs/cross-platform-verification.md)。
+
+Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机验证；安装、升级和卸载生命周期尚未完成验证。目前没有 macOS 安装包；SSH 管理、工作区恢复、快捷键配置和在线更新尚未交付。
+
 ## Windows / Linux 安装
 
 日常使用安装包不需要安装 Node.js 或 Python。需要图形桌面；终端运行系统已有的 shell。
@@ -90,8 +123,6 @@ Linux 已验证 Ubuntu 22.04 x64、Ubuntu 24.04 ARM64 和本地 Debian 13 x64。
 
 ## 从源码运行独立版本
 
-0.3.0 支持左右/上下嵌套分屏、独立 shell、目录继承、焦点切换和拖动调整比例，使用方式见[分屏说明](docs/cross-platform.md#分屏)。
-
 从源码启动（需要 Node.js 22.12+、npm、Python 和平台 C++ 构建工具，依赖准备见 [跨平台使用说明](docs/cross-platform.md#从源码构建和验证)）：
 
 ```bash
@@ -161,7 +192,7 @@ python3 bin/uninstall-launcher
 
 卸载移除本应用管理的桌面入口和图标，保留项目文件、设置和已导入的壁纸。之后可再次运行安装脚本恢复入口。
 
-## 功能
+## GTK 版本功能
 
 - 使用 `$SHELL` 指定的 shell；无效时回退至 `/bin/sh`。
 - 会话使用 `TERM=xterm-256color`，启用 Debian 默认的绿色用户名提示符和 shell 彩色输出，不改写用户的 shell 配置。
@@ -190,7 +221,7 @@ python3 bin/uninstall-launcher
 | 放大 / 缩小 / 重置字号 | Ctrl++ / Ctrl+- / Ctrl+0 |
 | 外观设置 | Ctrl+, |
 
-## 测试
+## GTK 版本测试
 
 界面预览：[深色](docs/images/ui-dark.png) · [浅色](docs/images/ui-light.png) · [外观设置](docs/images/preferences.png)。
 
