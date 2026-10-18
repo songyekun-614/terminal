@@ -1,5 +1,15 @@
 # 跨平台版本验证记录
 
+## 2026-10-18：0.3.0 更新并入与重新发布
+
+按用户要求保留 0.3.0 版本，将 B 版分屏、关闭确认和重命名焦点修复并入现有发布。[工作流 39098596650](https://github.com/songyekun-614/terminal/actions/runs/39098596650) 的四个原生平台任务与 release 任务均通过；`v0.3.0` 从原提交快进到 `3ea7b43a9eaab5cccc986169f535e84c5366a926`。同一 Release 的 10 个安装包、SHA256SUMS 和发布说明已更新。
+
+- Linux x64 / ARM64：源码及打包应用每轮各 35 项界面测试通过，1 项 IBus 桌面专项跳过。
+- Windows x64 / ARM64：源码及打包应用每轮各 34 项界面测试通过，Bash 提示符与 IBus 专项跳过。
+- 服务测试：各平台 18 项通过、1 项平台专项跳过；安装包构建及产物上传全部成功，发布任务对全部 10 个文件执行 SHA256 校验通过。
+- Windows x64 首次打包回归中，15 标签工具栏测试的界面断言通过，但 afterEach 清理超过 30 秒；单独重跑该平台任务后源码、打包和回归全部通过，未通过重试修改应用或测试代码。
+- 本轮未验证 IBus 桌面专项、Windows 10 实机、其他 Linux 发行版或安装/升级/卸载生命周期。下文为历史验证记录。
+
 ## 2026-10-18：0.3.0 正式发布与本地安装核实
 
 [v0.3.0 Release](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0) 已正式发布，包含 Windows/Linux x64、ARM64 共 10 个安装包及 SHA256SUMS。[发布工作流 39047315655](https://github.com/songyekun-614/terminal/actions/runs/39047315655) 的四个原生平台任务与发布任务均成功。

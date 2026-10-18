@@ -4,7 +4,7 @@
 
 当前正式版本为 **[0.3.0](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)**，已发布 Windows / Linux 的 x64、ARM64 安装包，共 10 个文件及 `SHA256SUMS`。
 
-当前工作区已采用确认后的 B 版分屏设计：12px 圆角、2px 接缝和 12px 拖动区域。关闭任意标签页及退出窗口都会先确认，空闲会话也会提醒；全局字体和小窗样式沿用 v0.2.2。本次更新并入 0.3.0；安装包更新状态及对应源码提交以 Release 发布说明和构建记录为准。
+0.3.0 已纳入确认后的 B 版分屏设计：12px 圆角、2px 接缝和 12px 拖动区域。关闭任意标签页及退出窗口都会先确认，空闲会话也会提醒；全局字体和小窗样式沿用 v0.2.2。本次更新已重新发布到同一 0.3.0 Release，10 个安装包和 SHA256SUMS 均已替换。
 
 ## 分屏与常用操作
 
@@ -31,9 +31,9 @@
 
 ## 发布与验证
 
-0.3.0 的[发布工作流](https://github.com/songyekun-614/terminal/actions/runs/39047315655)已在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境完成服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，并正式发布。
+0.3.0 的[发布工作流](https://github.com/songyekun-614/terminal/actions/runs/39098596650)已在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境完成服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，并正式发布。
 
-本地 Debian 13 x64 的源码、打包应用和安装后的应用分别通过全部 **32 项界面测试**；服务测试 18 项通过、1 项 Windows 专用测试跳过。详情见[交付核实记录](docs/2026-10-18-delivery-verification.md)与[跨平台验证记录](docs/cross-platform-verification.md)。
+本次四平台 CI 的源码与打包应用回归分别通过：Linux 每轮 **35 项通过、1 项专项跳过**，Windows 每轮 **34 项通过、2 项专项跳过**。服务测试各平台 18 项通过、1 项平台专项跳过；IBus 中文输入专项需要额外桌面环境，不属于本次 CI 验证范围。Windows x64 首次打包回归遇到多标签清理超时，单独重跑后通过。历史本地安装验证及平台限制见[交付核实记录](docs/2026-10-18-delivery-verification.md)与[跨平台验证记录](docs/cross-platform-verification.md)。
 
 Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机验证；安装、升级和卸载生命周期尚未完成验证。目前没有 macOS 安装包；SSH 管理、工作区恢复、快捷键配置和在线更新尚未交付。
 
