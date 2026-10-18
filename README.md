@@ -1,6 +1,6 @@
 # terminal
 
-一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。SSH 暂停开发。
+一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。
 
 当前正式版本为 **[0.3.0](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)**，已发布 Windows / Linux 的 x64、ARM64 安装包，共 10 个文件及 `SHA256SUMS`。
 
