@@ -123,6 +123,7 @@ function apply(value) {
   const p = palette(settings);
   document.body.style.setProperty("--terminal-bg", p.background);
   document.body.classList.toggle("light", settings.profile === "Basic");
+  document.body.classList.toggle("has-wallpaper", Boolean(wallpaperURL));
   document.body.style.setProperty(
     "--wallpaper-opacity",
     settings.wallpaper_opacity,
@@ -179,7 +180,7 @@ async function closeTab(id, { closeWindow = false } = {}) {
       return;
     }
     const panes = [...group.panes].map(id => sessions.get(id));
-    if (await busy(panes) && !(await api.confirmClose())) return;
+    if (!(await api.confirmClose())) return;
     for (const pane of panes) await disposePane(pane);
     const selected = panes.some(pane => pane.id === active);
     group.root.remove();
@@ -397,6 +398,7 @@ for (const action of ["close", "minimize", "maximize"])
   document.querySelector(`.traffic.${action}`).onclick = guard(() =>
     api.windowAction(action),
   );
+document.querySelector('#rename button[value="cancel"]').onclick = () => $("rename").close("cancel");
 $("rename").addEventListener("close", () => {
   if ($("rename").returnValue === "save") {
     const group = tabs.get(renamed);
@@ -406,6 +408,9 @@ $("rename").addEventListener("close", () => {
       updateTitle(group);
     }
   }
+  // Chromium restores DOM focus on dialog close without always reactivating IBus.
+  // Force a focus transition so Shift can switch input modes again on Linux.
+  current()?.term.blur();
   current()?.term.focus();
 });
 function search(back = false) {

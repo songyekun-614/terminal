@@ -24,9 +24,14 @@ export function splitLayout(pane, next, direction, resize) {
     resize();
   }
   let pointer = null;
+  let grabOffset = 0;
   separator.onpointerdown = event => {
     if (event.button !== 0) return;
     event.preventDefault();
+    const box = separator.getBoundingClientRect();
+    grabOffset = direction === "horizontal"
+      ? event.clientX - (box.x + box.width / 2)
+      : event.clientY - (box.y + box.height / 2);
     pointer = event.pointerId;
     separator.setPointerCapture(pointer);
     separator.focus();
@@ -35,9 +40,9 @@ export function splitLayout(pane, next, direction, resize) {
     if (event.pointerId !== pointer) return;
     const box = branch.getBoundingClientRect();
     const horizontal = direction === "horizontal";
-    const length = (horizontal ? box.width : box.height) - 6;
-    const offset = horizontal ? event.clientX - box.x : event.clientY - box.y;
-    if (length > 0) setRatio((offset - 3) / length * 100);
+    const length = horizontal ? box.width : box.height;
+    const offset = (horizontal ? event.clientX - box.x : event.clientY - box.y) - grabOffset;
+    if (length > 0) setRatio(offset / length * 100);
   };
   separator.onpointerup = separator.onpointercancel = () => { pointer = null; };
   separator.onlostpointercapture = () => { pointer = null; };

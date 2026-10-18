@@ -1,0 +1,72 @@
+/* Proposal only. Typography, chrome and dialogs come from the v0.2.2 stylesheet. */
+body { --pane-edge: #ffffff14; --pane-active-edge: #9eb7da60; --pane-heading: #ffffff05; --pane-active-heading: #9eb7da12; --handle: #a3a7b180; --preview-gutter: 2px; --half-gutter: 1px; --pane-radius: 12px; --pane-padding: 8px; }
+body[data-variant="a"] { --preview-gutter: 4px; --half-gutter: 2px; --pane-radius: 10px; --pane-padding: 10px; }
+body[data-variant="c"] { --preview-gutter: 1px; --half-gutter: .5px; --pane-radius: 6px; --pane-padding: 6px; }
+body[data-variant="d"] { --preview-gutter: 0px; --half-gutter: 0px; --pane-radius: 0px; --pane-padding: 6px; }
+body.light { --pane-edge: #24252816; --pane-active-edge: #607c9f70; --pane-heading: #24252803; --pane-active-heading: #607c9f0b; --handle: #696c7480; }
+main { background: var(--chrome); overflow: hidden; }
+.terminal-tab { inset: 0; }
+.terminal-pane {
+  padding: 0 var(--pane-padding) var(--pane-padding);
+  border: 0;
+  border-radius: var(--pane-radius);
+  background: var(--terminal-bg);
+  box-shadow: inset 0 0 0 1px var(--pane-edge);
+}
+.has-splits .terminal-pane.active { box-shadow: inset 0 0 0 1px var(--pane-active-edge); }
+body:is([data-variant="c"], [data-variant="d"]) .terminal-pane { box-shadow: none; }
+.pane-heading {
+  height: 34px;
+  margin: 0 calc(-1 * var(--pane-padding)) 6px;
+  padding: 0 8px 0 var(--pane-padding);
+  background: var(--pane-heading);
+  color: var(--muted);
+}
+.has-splits .active .pane-heading { background: var(--pane-active-heading); color: var(--text); }
+.has-splits .active .pane-heading span::after {
+  content: ' · 当前';
+  font-weight: normal;
+  color: var(--muted);
+}
+.pane-heading button { width: 26px; height: 26px; padding: 0; border-radius: 7px; }
+.terminal-tab:not(.has-splits) .terminal-pane { padding-top: 12px; }
+.split-layout.horizontal { grid-template-columns: minmax(0, calc(var(--split-ratio) - var(--half-gutter))) var(--preview-gutter) minmax(0, 1fr); }
+.split-layout.vertical { grid-template-rows: minmax(0, calc(var(--split-ratio) - var(--half-gutter))) var(--preview-gutter) minmax(0, 1fr); }
+/* The visible seam can be 0–4 px; the pointer target stays 12 px wide. */
+.split-separator { overflow: visible; z-index: 1; }
+.split-separator::before { content: ''; position: absolute; width: 12px; height: 100%; top: 0; left: 50%; transform: translateX(-50%); }
+.vertical > .split-separator::before { width: 100%; height: 12px; top: 50%; left: 0; transform: translateY(-50%); }
+.split-separator::after {
+  inset: auto;
+  width: 1px;
+  height: 28px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 2px;
+  background: var(--handle);
+}
+.vertical > .split-separator::after { inset: auto; top: 50%; left: 50%; width: 28px; height: 1px; }
+body[data-variant="c"] .split-separator::after { opacity: 0; }
+body[data-variant="d"] .split-separator::after { height: 100%; background: var(--pane-edge); }
+body[data-variant="d"] .vertical > .split-separator::after { width: 100%; height: 1px; }
+.split-separator:hover::after, .split-separator:focus-visible::after { opacity: 1; }
+.split-separator:hover::after, .split-separator:focus-visible::after { background: var(--muted); }
+.split-separator:focus-visible { outline-offset: 1px; }
+.tabs-row { display: flex; align-items: flex-start; gap: 8px; flex-shrink: 0; }
+.tabs-row #tabs { flex: 1; min-width: 0; padding-right: 0; }
+#pane-tools { position: static; height: 31px; padding: 0 12px 0 0; gap: 4px; }
+#pane-tools button { border-radius: 8px; padding: 4px 9px; }
+@media (max-width: 650px) {
+  .tabs-row { flex-direction: column; align-items: stretch; gap: 0; }
+  .tabs-row #tabs { padding-right: 12px; }
+  #pane-tools { position: static; padding: 0 12px 8px; }
+}
+@media (prefers-contrast: more) {
+  body, body.light { --pane-edge: var(--muted); --pane-active-edge: var(--text); --handle: var(--text); }
+}
+@media (forced-colors: active) {
+  .terminal-pane { border-color: CanvasText; }
+  .has-splits .terminal-pane.active { border-color: Highlight; }
+  .split-separator::after { background: ButtonText; }
+}

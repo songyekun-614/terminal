@@ -308,22 +308,20 @@ app
     window.webContents.session.setPermissionCheckHandler(() => false);
     window.on("close", (event) => {
       if (closing) return;
-      if ([...sessions.items.values()].some((s) => s.busy)) {
-        event.preventDefault();
-        if (window._confirming) return;
-        window._confirming = true;
-        confirmClose()
-          .then((ok) => {
-            window._confirming = false;
-            if (ok) {
-              closing = true;
-              window.close();
-            }
-          })
-          .catch(() => {
-            window._confirming = false;
-          });
-      } else closing = true;
+      event.preventDefault();
+      if (window._confirming) return;
+      window._confirming = true;
+      confirmClose()
+        .then((ok) => {
+          window._confirming = false;
+          if (ok) {
+            closing = true;
+            window.close();
+          }
+        })
+        .catch(() => {
+          window._confirming = false;
+        });
     });
     window.on("closed", () => {
       sessions.dispose();

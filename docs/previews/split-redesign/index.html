@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>terminal · 分屏设计确认</title>
+  <style>
+    * { box-sizing: border-box; } body { margin:0; background:#e5e6e8; color:#242528; font:13px system-ui,sans-serif; }
+    .review { max-width:1360px; margin:auto; padding:24px 32px 16px; }
+    .intro { display:flex; align-items:baseline; gap:14px; margin-bottom:18px; } h1 { margin:0; font-size:20px; font-weight:600; } .intro span, .hint { color:#61646c; font-size:12px; }
+    .tools { display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+    .variants { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+    .variants button { flex:1; min-width:145px; text-align:left; background:#d7d8dc; padding:10px 12px; border:1px solid transparent; border-radius:10px; }
+    .variants button[aria-pressed="true"] { background:#fff; border-color:#607c9f; }
+    .variants strong { display:block; font-size:13px; font-weight:600; }
+    .variants small { display:block; color:#61646c; font-size:11px; margin-top:4px; }
+    #variant-note { margin:0 0 14px; font-size:12px; color:#61646c; }
+    .group { display:flex; gap:2px; background:#d7d8dc; border-radius:9px; padding:3px; }
+    button { font:inherit; border:0; background:transparent; color:inherit; border-radius:6px; padding:6px 12px; cursor:pointer; min-height:28px; }
+    button[aria-pressed="true"] { background:#fff; box-shadow:0 1px 3px #0002; } button:hover { background:#ffffff85; } button:focus-visible { outline:2px solid #557baa; outline-offset:2px; }
+    .extras { margin-left:auto; display:flex; gap:6px; } .extras button { border:1px solid #bbbfc6; }
+    .window { height: min(700px,calc(100dvh - 290px)); min-height:370px; border-radius:20px; overflow:hidden; box-shadow:0 24px 65px #24252826,0 0 0 1px #00000016; background:#24262b; }
+    iframe { width:100%; height:100%; border:0; display:block; }
+    .hint { margin:16px 0 0; line-height:1.7; display:flex; justify-content:space-between; gap:16px; }
+    a { color:#365d90; } @media(max-width:700px) { .review { padding:16px; } .intro { flex-wrap:wrap; gap:4px; } .extras { margin-left:0; } .window { height:65dvh; } .hint { display:block; } }
+  </style>
+</head>
+<body>
+<div class="review">
+  <div class="intro"><h1>terminal / 分屏设计</h1><span>设计预览 · 等待确认</span></div>
+  <div class="variants" role="group" aria-label="选择分屏版本">
+    <button data-variant="a" aria-pressed="false"><strong>A · 微距圆角 / 4px</strong><small>10px 圆角，保留独立面板感</small></button>
+    <button data-variant="b" aria-pressed="true"><strong>B · 紧凑圆角 / 2px</strong><small>12px 圆角，接缝收紧</small></button>
+    <button data-variant="c" aria-pressed="false"><strong>C · 极细接缝 / 1px</strong><small>6px 圆角，弱化边框与拖柄</small></button>
+    <button data-variant="d" aria-pressed="false"><strong>D · 连续画布 / 0px</strong><small>无留缝，用低对比细线区分</small></button>
+  </div>
+  <p id="variant-note" aria-live="polite">B：2px 间距、12px 圆角；比上一版减少三分之二的空隙。</p>
+  <div class="tools">
+    <div class="group" aria-label="外观方案"><button data-design="new" aria-pressed="true">新设计</button><button data-design="old" aria-pressed="false">原分屏</button></div>
+    <div class="group" aria-label="分屏布局"><button data-layout="horizontal" aria-pressed="true">左右</button><button data-layout="vertical" aria-pressed="false">上下</button><button data-layout="nested" aria-pressed="false">三分屏</button><button data-layout="single" aria-pressed="false">单面板</button></div>
+    <div class="group" aria-label="配色"><button data-theme="dark" aria-pressed="true">深色</button><button data-theme="light" aria-pressed="false">浅色</button></div>
+    <div class="extras"><button id="preferences">外观设置</button><button id="close-demo">退出确认示意</button></div>
+  </div>
+  <div class="window"><iframe id="terminal" title="terminal 分屏交互预览" src="terminal.html?layout=horizontal&theme=dark&design=new&variant=b&revision=5"></iframe></div>
+  <p class="hint"><span>点击面板切换焦点；拖动中央短柄调整大小。字体、设置与菜单沿用 v0.2.2 基准。<br>此页使用演示输出，不运行本地命令；退出确认仅展示原有文案，正式版使用系统原生窗口。</span><span>参考 <a href="https://developer.apple.com/design/human-interface-guidelines/split-views" target="_blank" rel="noopener">Apple HIG · Split views</a></span></p>
+</div>
+<script>
+  const frame = document.getElementById('terminal');
+  const state = { layout:'horizontal', theme:'dark', design:'new',variant:'b',revision:'5' };
+  const notes={a:'A：4px 间距、10px 圆角；仍能看出独立面板，但接缝更小。',b:'B：2px 间距、12px 圆角；比上一版减少三分之二的空隙。',c:'C：1px 间距、6px 圆角；隐藏常驻拖柄，悬停时显示。',d:'D：0px 留缝，取消内部圆角；共享一张连续画布，只保留低对比细线。'};
+  document.querySelectorAll('[data-variant]').forEach(button=>button.onclick=()=>{
+    state.variant=button.dataset.variant;
+    document.querySelectorAll('[data-variant]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
+    document.getElementById('variant-note').textContent=notes[state.variant];
+    state.design='new';document.querySelectorAll('[data-design]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.design==='new')));
+    frame.contentWindow.postMessage({type:'design',value:'new'},location.origin);
+    frame.contentWindow.postMessage({type:'variant',value:state.variant},location.origin);
+  });
+  document.querySelectorAll('[data-layout],[data-theme],[data-design]').forEach(button => button.onclick = () => {
+    const key = Object.keys(button.dataset)[0]; state[key] = button.dataset[key];
+    document.querySelectorAll(`[data-${key}]`).forEach(b => b.setAttribute('aria-pressed',String(b === button)));
+    if(key === 'design') frame.contentWindow.postMessage({type:'design', value:state.design}, location.origin);
+    else frame.src = 'terminal.html?' + new URLSearchParams(state);
+  });
+  document.getElementById('preferences').onclick = () => frame.contentWindow.postMessage({type:'settings'},location.origin);
+  document.getElementById('close-demo').onclick = () => frame.contentWindow.postMessage({type:'confirm'},location.origin);
+</script>
+</body>
+</html>
