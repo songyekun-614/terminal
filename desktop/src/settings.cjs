@@ -2,6 +2,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { normalizeShortcuts, validateShortcuts } = require("./shortcuts.cjs");
 const PROFILES = {
   Pro: { background: "#17191e", foreground: "#f2f2f4", cursor: "#d2d4da" },
   Basic: { background: "#faf9f7", foreground: "#242528", cursor: "#27282a" },
@@ -19,6 +20,7 @@ function normalizeSettings(value) {
     value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
     profile: Object.hasOwn(PROFILES, v.profile) ? v.profile : "Pro",
+    shortcuts: normalizeShortcuts(v.shortcuts),
     font_family:
       typeof v.font_family === "string" &&
       v.font_family.trim() &&
@@ -60,6 +62,7 @@ function readSettings(root) {
   }
 }
 function saveSettings(root, value) {
+  if (value && Object.hasOwn(value, "shortcuts")) validateShortcuts(value.shortcuts);
   const s = normalizeSettings(value);
   fs.mkdirSync(root, { recursive: true });
   const temp = path.join(root, `.settings-${crypto.randomUUID()}`);

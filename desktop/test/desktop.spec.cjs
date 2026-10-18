@@ -952,3 +952,309 @@ test("Escape while a busy tab confirmation is pending cannot close another tab",
   await expect(page.getByRole("tab")).toHaveCount(1);
   await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
+
+async function openShortcuts() {
+  await page.getByRole("button", { name: "更多操作", exact: true }).click();
+  await page.getByRole("button", { name: "快捷键设置…", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "快捷键设置", exact: true })).toBeVisible();
+}
+async function recordShortcut(label, chord) {
+  await page.getByRole("button", { name: `${label}快捷键`, exact: true }).click();
+  await page.keyboard.press(chord);
+}
+
+test("custom shortcuts replace old bindings, persist on reload and update toolbar hints", async () => {
+  await openShortcuts();
+  await recordShortcut("新建标签页", "Control+Alt+N");
+  await recordShortcut("左右分屏", "Control+Alt+H");
+  await recordShortcut("关闭当前面板", "Control+Alt+X");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  expect(JSON.parse(fs.readFileSync(path.join(root, "settings.json"))).shortcuts.new_tab).toBe("Ctrl+Alt+N");
+  await expect(page.locator("#split-horizontal")).toHaveAttribute("aria-keyshortcuts", "Control+Alt+H");
+  await expect(page.getByRole("button", { name: "关闭此面板", exact: true, includeHidden: true })).toHaveAttribute("title", "关闭此面板 · Ctrl+Alt+X");
+  await page.keyboard.press("Control+Alt+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+T");
+  await page.keyboard.press("Control+Alt+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await expect(page.locator(".terminal-pane:visible button[aria-label=关闭此面板]").last()).toHaveAttribute("aria-keyshortcuts", "Control+Alt+X");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await page.reload();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Alt+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+test("shortcut recording reports conflicts, supports clearing and cancelling without saving", async () => {
+  await openShortcuts();
+  await recordShortcut("新建标签页", "Control+Shift+W");
+  await expect(page.locator("#shortcuts-error")).toContainText("冲突");
+  await expect(page.getByRole("button", { name: "保存快捷键", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "新建标签页快捷键", exact: true })).toHaveAttribute("aria-invalid", "true");
+  await page.getByRole("button", { name: "清除关闭标签页快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts-error")).toBeEmpty();
+  await expect(page.getByRole("button", { name: "保存快捷键", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.keyboard.press("Control+Shift+T");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await openShortcuts();
+  await expect(page.getByRole("button", { name: "新建标签页快捷键", exact: true })).toHaveText("Ctrl+Shift+T");
+  await page.getByRole("button", { name: "新建标签页快捷键", exact: true }).click();
+  await page.keyboard.press("Control+V");
+  await expect(page.locator("#shortcuts-error")).toContainText("保留");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shortcuts")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+});
+
+test("disabled terminal Escape reaches the real PTY while dialog Escape still cancels", async () => {
+  await openShortcuts();
+  await page.getByRole("button", { name: "清除关闭面板或退出快捷键", exact: true }).click();
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  await app.evaluate(({ ipcMain }) => {
+    global.escapeWrites = [];
+    const handlers = ipcMain._invokeHandlers;
+    const original = handlers.get("terminal:write");
+    ipcMain.removeHandler("terminal:write");
+    ipcMain.handle("terminal:write", (event, id, data) => {
+      global.escapeWrites.push(data);
+      return original(event, id, data);
+    });
+  });
+  await page.keyboard.press("Escape");
+  await expect.poll(() => app.evaluate(() => global.escapeWrites.join(""))).toContain("\x1b");
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await openShortcuts();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("shortcut saves do not commit or discard an open appearance preview", async () => {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByLabel("字体大小", { exact: true }).fill("19");
+  await page.locator("#shortcuts-open").click();
+  await recordShortcut("新建标签页", "Control+Alt+N");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  await expect(page.locator("#settings")).toBeVisible();
+  const disk = JSON.parse(fs.readFileSync(path.join(root, "settings.json"), "utf8"));
+  expect(disk.font_size).toBe(12);
+  expect(disk.shortcuts.new_tab).toBe("Ctrl+Alt+N");
+  await page.locator("#settings-cancel").click();
+  await expect(page.locator(".terminal-pane.active .xterm-rows")).toHaveCSS("font-size", "12px");
+  await page.keyboard.press("Control+Alt+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+test("custom paste executes once, and recording navigation and reset stay keyboard accessible", async () => {
+  await openShortcuts();
+  await recordShortcut("粘贴", "Control+Alt+V");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  await app.evaluate(({ clipboard }, command) => clipboard.writeText(command),
+    process.platform === "win32" ? "Write-Output ('custom-' + 'paste')" : "printf '%s\\n' 'custom-'paste");
+  await page.keyboard.press("Control+Alt+V");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".terminal-pane.active .xterm-screen")).toContainText("custom-paste");
+  expect((await page.locator(".terminal-pane.active .xterm-screen").textContent()).match(/custom-paste/g)).toHaveLength(1);
+  await openShortcuts();
+  const recorder = page.getByRole("button", { name: "新建标签页快捷键", exact: true });
+  await recorder.click();
+  await page.keyboard.press("Tab");
+  await expect(recorder).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "清除新建标签页快捷键", exact: true })).toBeFocused();
+  await recordShortcut("新建标签页", "Control+Tab");
+  await expect(recorder).toHaveText("Ctrl+Tab");
+  await expect(recorder).toHaveAccessibleDescription(/当前快捷键：Ctrl\+Tab/);
+  await page.getByRole("button", { name: "恢复默认", exact: true }).click();
+  await expect(page.getByRole("button", { name: "粘贴快捷键", exact: true })).toHaveText("Ctrl+Shift+V");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  expect(JSON.parse(fs.readFileSync(path.join(root, "settings.json"))).shortcuts.paste).toBe("Ctrl+Shift+V");
+});
+
+test("shortcut save failures keep the draft and explain how to retry", async () => {
+  await openShortcuts();
+  await recordShortcut("新建标签页", "Control+Alt+N");
+  await app.evaluate(({ ipcMain }) => {
+    const original = ipcMain._invokeHandlers.get("terminal:saveShortcuts");
+    let first = true;
+    ipcMain.removeHandler("terminal:saveShortcuts");
+    ipcMain.handle("terminal:saveShortcuts", (...args) => {
+      if (first) { first = false; throw Error("保存失败，请重试"); }
+      return original(...args);
+    });
+  });
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts-error")).toContainText("保存失败，请重试");
+  await expect(page.locator("#shortcuts")).toBeVisible();
+  await expect(page.getByRole("button", { name: "新建标签页快捷键", exact: true })).toHaveText("Ctrl+Alt+N");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+  await page.keyboard.press("Control+Alt+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+async function launchAgainForRecovery() {
+  app = await electron.launch({
+    executablePath: process.env.TERMINAL_TEST_EXECUTABLE,
+    args: [
+      ...(process.getuid?.() === 0 ? ["--no-sandbox"] : []),
+      ...(process.env.TERMINAL_TEST_EXECUTABLE ? [] : [path.join(__dirname, "../src/main.cjs")]),
+    ],
+    env: { ...process.env, TERMINAL_CONFIG_ROOT: root },
+  });
+  page = await app.firstWindow();
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+}
+function savedRecoveryWorkspace() {
+  try {
+    return fs.readdirSync(path.join(root, "recovery"))
+      .filter(name => name.endsWith(".json"))
+      .map(name => JSON.parse(fs.readFileSync(path.join(root, "recovery", name), "utf8")))
+      .filter(record => record.workspace)
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0]?.workspace;
+  } catch { return null; }
+}
+async function crashTerminal() {
+  const process = app.process();
+  const exited = new Promise(resolve => process.once("exit", resolve));
+  process.kill("SIGKILL");
+  await exited;
+}
+
+test("crash recovery restores nested splits, tab names, focus and directories without replaying commands", async () => {
+  test.setTimeout(60000);
+  const folder = path.join(root, "recover-project");
+  fs.mkdirSync(folder);
+  fs.writeFileSync(path.join(folder, "restore-directory-marker"), root);
+  await page.keyboard.type(process.platform === "win32" ? `Set-Location -LiteralPath '${folder.replaceAll("'", "''")}'` : `cd '${folder.replaceAll("'", "'\\''")}'`);
+  await page.keyboard.press("Enter");
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const divider = page.getByRole("separator").first();
+  await divider.focus(); await divider.press("Home"); await divider.press("ArrowRight");
+  await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+Shift+J");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(3);
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("恢复项目"); await page.keyboard.press("Enter");
+  await expect(page.getByRole("tab")).toHaveText("恢复项目");
+  await page.keyboard.press("Control+Shift+T");
+  await expect(page.getByRole("tab")).toHaveCount(2); await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("后台任务"); await page.keyboard.press("Enter");
+  await page.getByRole("tab", { name: "恢复项目", exact: true }).click();
+  const marker = path.join(folder, "command-runs");
+  await page.keyboard.type(process.platform === "win32"
+    ? `Add-Content -LiteralPath '${marker.replaceAll("'", "''")}' -Value 'once'; Start-Sleep -Seconds 120`
+    : `printf 'once\\n' >> '${marker.replaceAll("'", "'\\''")}'; sleep 120`);
+  await page.keyboard.press("Enter");
+  await expect.poll(() => fs.existsSync(marker)).toBe(true);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.map(t => t.title)).toEqual(["恢复项目", "后台任务"]);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs[0].layout.ratio).toBe(20);
+  await expect.poll(() => savedRecoveryWorkspace()?.activeTab).toBe(savedRecoveryWorkspace().tabs[0].id);
+  const before = savedRecoveryWorkspace();
+  expect(before.activeTab).toBe(before.tabs[0].id);
+  await crashTerminal(); await launchAgainForRecovery();
+  await expect(page.getByRole("dialog", { name: "恢复上次的终端？", exact: true })).toBeVisible();
+  await expect(page.locator("#recovery-summary")).toHaveText("2 个标签页 · 4 个面板");
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveText(["恢复项目", "后台任务"]);
+  await expect(page.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(3);
+  await expect(page.getByRole("separator").first()).toHaveAttribute("aria-valuenow", "20");
+  await expect(page.locator(".terminal-pane:visible").nth(2)).toHaveClass(/active/);
+  await waitForIdleTerminal();
+  const directories = await page.locator(".terminal-pane").evaluateAll(async panes => Promise.all(panes.map(async pane => (await window.terminalAPI.sessionInfo(pane.id.slice(9))).cwd)));
+  for (const cwd of directories) expect(fs.readFileSync(path.join(cwd, "restore-directory-marker"), "utf8")).toBe(root);
+  expect(fs.readFileSync(marker, "utf8").trim()).toBe("once");
+});
+
+test("normal exit does not offer recovery and an unanswered recovery prompt survives closing", async () => {
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.length).toBe(1);
+  await app.close(); await launchAgainForRecovery();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+T"); await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.length).toBe(2);
+  await crashTerminal(); await launchAgainForRecovery();
+  await expect(page.locator("#recovery")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#recovery")).toBeVisible();
+  await expect(page.locator("#recovery-summary")).toHaveText("2 个标签页 · 2 个面板");
+  await app.close(); await launchAgainForRecovery();
+  await expect(page.locator("#recovery")).toBeVisible();
+  await page.getByRole("button", { name: "新建终端", exact: true }).click();
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.length).toBe(1);
+});
+
+test("recovery falls back from missing directories and unavailable shells and ignores corrupt records", async () => {
+  const oldPid = app.process().pid;
+  await app.close();
+  fs.mkdirSync(path.join(root, "recovery"), { recursive: true });
+  const layout = { version: 1, activeTab: "tab-old", tabs: [{ id: "tab-old", title: "目录已删除", activePane: "pane-old", layout: {
+    type: "pane", id: "pane-old", cwd: path.join(root, "does-not-exist"), shell: "missing-shell",
+  } }] };
+  fs.writeFileSync(path.join(root, "recovery", `window-${oldPid}-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json`), JSON.stringify({ version: 1, pid: oldPid, updatedAt: new Date().toISOString(), workspace: layout }));
+  fs.writeFileSync(path.join(root, "recovery", `window-${oldPid}-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.json`), "{broken");
+  await launchAgainForRecovery(); await expect(page.locator("#recovery")).toBeVisible();
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveText("目录已删除");
+  await waitForIdleTerminal();
+  await expect(page.locator("#status")).toContainText("改用主目录或默认 Shell");
+  const cwd = await page.evaluate(async () => (await window.terminalAPI.sessionInfo(document.querySelector(".terminal-pane.active").id.slice(9))).cwd);
+  expect({ dev: fs.statSync(cwd).dev, ino: fs.statSync(cwd).ino }).toEqual({ dev: fs.statSync(os.homedir()).dev, ino: fs.statSync(os.homedir()).ino });
+});
+
+test("a renderer crash keeps the last workspace recoverable", async () => {
+  test.setTimeout(60000);
+  await page.keyboard.press("Control+Shift+T"); await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.length).toBe(2);
+  const child = app.process(), exited = new Promise(resolve => child.once("exit", resolve));
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.forcefullyCrashRenderer()).catch(() => {});
+  await exited; await launchAgainForRecovery();
+  await expect(page.locator("#recovery")).toBeVisible();
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+test("a failed restoration preserves the original record and can be retried", async () => {
+  test.setTimeout(60000);
+  await page.keyboard.press("Control+Shift+T"); await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect.poll(() => savedRecoveryWorkspace()?.tabs.length).toBe(2);
+  await crashTerminal(); await launchAgainForRecovery();
+  await expect(page.locator("#recovery")).toBeVisible();
+  await app.evaluate(({ ipcMain }) => {
+    const original = ipcMain._invokeHandlers.get("terminal:saveWorkspace");
+    let first = true;
+    ipcMain.removeHandler("terminal:saveWorkspace");
+    ipcMain.handle("terminal:saveWorkspace", (...args) => {
+      if (first) { first = false; throw Error("恢复记录写入失败"); }
+      return original(...args);
+    });
+  });
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect(page.locator("#recovery-error")).toContainText("恢复记录写入失败");
+  await expect(page.locator("#recovery")).toBeVisible();
+  expect(savedRecoveryWorkspace().tabs).toHaveLength(2);
+  await expect(page.getByRole("tab")).toHaveCount(0);
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect(page.locator("#recovery")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});

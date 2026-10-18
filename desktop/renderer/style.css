@@ -417,3 +417,56 @@ body.light {
 @media (prefers-contrast: more) {
   :root, body.light { --pane-edge: var(--muted); --pane-active-edge: var(--text); --split-handle: var(--text); }
 }
+
+/* Shortcut preferences use the terminal's existing palette and system typography. */
+#shortcuts { width: min(620px, calc(100vw - 40px)); padding: 0; overflow: hidden; --shortcut-error: #ffaaa5; --shortcut-focus: #9eb7da; }
+#shortcuts-form { display: flex; flex-direction: column; max-height: min(760px, 88vh); }
+.shortcut-header { padding: 24px 24px 16px; border-bottom: 1px solid var(--border); }
+.shortcut-header p { margin: 8px 0 0; line-height: 1.6; }
+#shortcuts-list { overflow-y: auto; min-height: 0; padding: 4px 24px 12px; scrollbar-gutter: stable; }
+.shortcut-section h3 { margin: 20px 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.shortcut-section ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; min-height: 48px; }
+.shortcut-row + .shortcut-row { border-top: 1px solid var(--border); }
+.shortcut-label { line-height: 1.5; }
+.shortcut-controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.shortcut-recorder { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 164px; min-height: 32px; padding: 4px 6px; border-radius: 6px; }
+.shortcut-recorder kbd { font: inherit; font-size: 12px; line-height: 22px; min-width: 24px; padding: 0 5px; text-align: center; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); }
+.shortcut-plus { color: var(--muted); font-size: 11px; }
+.shortcut-placeholder { color: var(--muted); font-size: 12px; }
+.shortcut-clear { width: 28px; height: 28px; padding: 0; font-size: 17px; color: var(--muted); border-radius: 6px; }
+#shortcuts button:active { background: var(--surface); }
+#shortcuts button:disabled { cursor: default; opacity: .55; }
+.shortcut-row.recording { background: var(--pane-active-heading); }
+.shortcut-row.recording .shortcut-recorder { outline: 2px solid var(--shortcut-focus); outline-offset: 1px; }
+.shortcut-row.conflict .shortcut-recorder { outline: 2px solid var(--shortcut-error); outline-offset: 1px; }
+body.light #shortcuts { --muted: #686b73; --shortcut-error: #a92a28; --shortcut-focus: #526e94; }
+#shortcuts button:focus-visible { outline-color: var(--shortcut-focus); }
+.shortcut-bottom { padding: 12px 24px 20px; border-top: 1px solid var(--border); }
+.shortcut-note { margin: 0; line-height: 1.6; }
+#shortcuts-recording, #shortcuts-error { margin: 8px 0 0; line-height: 1.5; font-size: 12px; }
+#shortcuts-recording:empty, #shortcuts-error:empty { display: none; }
+#shortcuts-error { color: var(--shortcut-error); }
+#shortcuts footer { margin-top: 14px; flex-wrap: wrap; }
+.shortcut-footer-spacer { flex: 1; }
+#shortcuts-open { margin-top: 8px; padding-inline: 0; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 520px) {
+  .shortcut-header { padding: 20px 16px 12px; }
+  #shortcuts-list { padding-inline: 16px; }
+  .shortcut-bottom { padding: 12px 16px 16px; }
+  .shortcut-row { flex-wrap: wrap; gap: 4px; padding: 8px 10px; }
+  .shortcut-controls { margin-left: auto; }
+}
+@media (forced-colors: active) {
+  .shortcut-row.recording .shortcut-recorder, .shortcut-row.conflict .shortcut-recorder { outline-color: Highlight; }
+}
+
+#recovery p { line-height: 1.65; }
+.recovery-details { display: grid; gap: 6px; padding: 14px 16px; margin: 16px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.recovery-details strong { font-size: 13px; font-weight: 600; }
+#recovery-error { color: #ffaaa5; font-size: 12px; }
+#recovery-error:empty { display: none; }
+body.light #recovery { --muted: #686b73; }
+body.light #recovery-error { color: #a92a28; }
+body.light #recovery button:focus-visible { outline-color: #526e94; }
+#recovery button:disabled { cursor: default; opacity: .55; }

@@ -2,9 +2,9 @@
 
 一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。
 
-当前正式版本为 **[0.3.0](https://github.com/songyekun-614/terminal/releases/tag/v0.3.0)**，已发布 Windows / Linux 的 x64、ARM64 安装包，共 10 个文件及 `SHA256SUMS`。
+本次版本为 **[0.4.0](https://github.com/songyekun-614/terminal/releases/tag/v0.4.0)**，新增自定义快捷键与异常退出恢复。发布工作流在 Windows / Linux 的 x64、ARM64 四个平台验证后提供 10 个安装包及 `SHA256SUMS`。
 
-0.3.0 已纳入确认后的 B 版分屏设计：12px 圆角、2px 接缝和 12px 拖动区域。关闭任意标签页及退出窗口都会先确认，空闲会话也会提醒；全局字体和小窗样式沿用 v0.2.2。本次更新已重新发布到同一 0.3.0 Release，10 个安装包和 SHA256SUMS 均已替换。
+沿用 B 版分屏设计：12px 圆角、2px 接缝和 12px 拖动区域。关闭任意标签页及退出窗口都会先确认，空闲会话也会提醒。
 
 ## 分屏与常用操作
 
@@ -27,15 +27,39 @@
 
 `Ctrl+V` 可直接粘贴；`Ctrl+C` 在有文字选区时复制，没有选区时中断命令。也支持 `Ctrl+Shift+C` / `Ctrl+Shift+V`。
 
-`Esc` 优先取消弹窗、菜单或搜索，再关闭当前面板；关闭标签页或退出窗口始终要求确认，单独关闭分屏面板时在会话忙碌时确认。当前 Esc 也会拦截 Vim 等程序的同名按键。分屏布局仅在本次运行期间保留，重启后不会恢复。更多分隔线键盘操作及使用限制见[分屏说明](docs/cross-platform.md#分屏)。
+`Esc` 优先取消弹窗、菜单或搜索，再关闭当前面板；关闭标签页或退出窗口始终要求确认，单独关闭分屏面板时在会话忙碌时确认。当前 Esc 也会拦截 Vim 等程序的同名按键。正常退出后不恢复布局；异常退出后，下次启动可选择恢复标签页、分屏和目录。更多分隔线键盘操作及使用限制见[分屏说明](docs/cross-platform.md#分屏)。
+
+## 自定义快捷键
+
+在“更多操作 → 快捷键设置…”或“设置 → 快捷键设置…”中配置。按标签页、分屏、编辑与搜索、显示与设置分组，共 19 个操作；点击右侧按键后直接按下新组合键，再点击“保存快捷键”。修改立即生效，重新启动后继续保留，工具栏提示同步更新。
+
+- 支持 Ctrl、Alt、Shift、Meta 组合和 F1–F24；普通字符需搭配 Ctrl、Alt 或 Meta，避免占用 shell 输入。系统拦截的组合键可能无法送达应用。
+- 重复绑定会显示冲突并阻止保存；可先清除原绑定或交换两项绑定。常见系统组合键及固定 Ctrl+C / Ctrl+V 别名不能绑定到其他操作。
+- 每行右侧 × 清除绑定。“恢复默认”恢复整套默认值，仍需保存；“取消”或 Esc 放弃本次修改。录入时 Esc 仅取消录入，Tab 结束录入并移至下一控件，Delete / Backspace 清除当前绑定。
+- 清除“关闭面板或退出”的 Esc 绑定后，Esc 会传给 Vim 等终端程序；弹窗、菜单和搜索中的 Esc 取消功能始终保留。
+- Ctrl+C 仍在有选区时复制、无选区时中断命令；Ctrl+V 仍可直接粘贴。外观设置的预览与快捷键保存互不覆盖。
+
+界面预览：[深色](docs/images/shortcuts-dark.png) · [浅色](docs/images/shortcuts-light.png)。
+
+## 异常退出恢复
+
+终端被强制关闭、崩溃或系统意外退出后，下次启动会提示“恢复上次的终端？”。点击“恢复会话”，重建上次的标签顺序、名称、左右/上下嵌套分屏、比例、当前面板、Shell 和工作目录。
+
+- 正常退出不触发恢复；未决定是否恢复就关闭窗口，记录仍会保留。Esc 不会丢弃恢复记录，只有明确点击“新建终端”才放弃当前记录。
+- 每个窗口分别记录，仍在运行的窗口不会被当成异常退出。如果有多个异常退出窗口，每次启动先提示最近的一份，其他记录保留。
+- 目录已删除或原 Shell 不可用时，使用主目录或默认 Shell，并显示恢复结果。
+- 布局变动后约 200ms 保存；工作目录定期核对，异常前最后约 2 秒的变化可能尚未保存。恢复记录位于配置目录的 recovery 子目录。
+- 恢复会启动新的 Shell，**不会续跑原进程、重放命令或恢复历史屏幕内容、未提交输入和临时环境变量**。
+
+自定义快捷键与异常退出恢复从 0.4.0 开始提供。
 
 ## 发布与验证
 
-0.3.0 的[发布工作流](https://github.com/songyekun-614/terminal/actions/runs/39098596650)已在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境完成服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，并正式发布。
+[发布工作流](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml)在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境依次执行服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，全部通过才发布。IBus 中文输入专项需要额外桌面环境，不属于常规 CI 验证范围。
 
-本次四平台 CI 的源码与打包应用回归分别通过：Linux 每轮 **35 项通过、1 项专项跳过**，Windows 每轮 **34 项通过、2 项专项跳过**。服务测试各平台 18 项通过、1 项平台专项跳过；IBus 中文输入专项需要额外桌面环境，不属于本次 CI 验证范围。Windows x64 首次打包回归遇到多标签清理超时，单独重跑后通过。历史本地安装验证及平台限制见[交付核实记录](docs/2026-10-18-delivery-verification.md)与[跨平台验证记录](docs/cross-platform-verification.md)。
+本次本地 Linux x64 验证：服务测试 32 项通过、1 项 Windows 专项跳过；实际安装版本界面测试 46 项通过、1 项 IBus 专项跳过。功能范围及故障注入测试见[快捷键验证](docs/2026-10-18-shortcuts-verification.md)与[异常恢复验证](docs/2026-10-18-recovery-verification.md)。各平台最终发布结果以相应工作流记录为准。
 
-Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机验证；安装、升级和卸载生命周期尚未完成验证。目前没有 macOS 安装包；SSH 管理、工作区恢复、快捷键配置和在线更新尚未交付。
+Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机验证；安装、升级和卸载生命周期尚未完成验证。目前没有 macOS 安装包；SSH 管理、正常退出后的工作区自动恢复和在线更新尚未交付。各版本功能以对应 Release 发布说明为准。
 
 ## Windows / Linux 安装
 
@@ -56,15 +80,15 @@ Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机�
 
 Windows 在“设置 → 系统 → 系统信息（关于）→ 系统类型”查看架构：Intel / AMD 的 64 位电脑选择 `x64`，ARM 电脑选择 `arm64`。Linux 运行 `uname -m`：`x86_64` 对应 `x64`，`aarch64` 对应 `arm64`。目前提供这两种架构。
 
-以下命令以 **0.3.0 x64** 安装包为例，在下载文件所在目录执行；Windows ARM64 用户将文件名中的 `x64` 换成 `arm64`；Linux ARM64 的 AppImage/deb 使用 `arm64`，rpm 使用 `aarch64`。Linux x64 的 AppImage/rpm 使用 `x86_64`，deb 使用 `amd64`。其他版本按实际文件名修改。
+以下命令以 **0.4.0 x64** 安装包为例，在下载文件所在目录执行；Windows ARM64 用户将文件名中的 `x64` 换成 `arm64`；Linux ARM64 的 AppImage/deb 使用 `arm64`，rpm 使用 `aarch64`。Linux x64 的 AppImage/rpm 使用 `x86_64`，deb 使用 `amd64`。其他版本按实际文件名修改。
 
 ### Windows
 
 1. 从 Release 下载对应架构的安装器；使用 Actions 产物时先解压外层压缩包。
-2. 双击 `terminal-0.3.0-windows-x64-setup.exe`，按提示选择安装目录。安装到当前用户，无需管理员权限。
+2. 双击 `terminal-0.4.0-windows-x64-setup.exe`，按提示选择安装目录。安装到当前用户，无需管理员权限。
 3. 从开始菜单或桌面快捷方式启动 **terminal**。默认使用已安装的 PowerShell 7，否则使用 Windows PowerShell；可在外观设置中选择 cmd。
 
-也可使用 zip 版本：解压下载的 `terminal-0.3.0-windows-x64.zip` 到当前用户可写的目录，双击其中的 `terminal.exe`。设置仍保存在用户配置目录。
+也可使用 zip 版本：解压下载的 `terminal-0.4.0-windows-x64.zip` 到当前用户可写的目录，双击其中的 `terminal.exe`。设置仍保存在用户配置目录。
 
 当前安装包未签名，Windows 可能显示 SmartScreen 提示。请核对文件来自本仓库构建。兼容性目标为 Windows 10 x64 1809+、ARM64 1903+ 和 Windows 11；原生 CI 已验证 Windows Server 2022 x64 与 Windows 11 ARM64，Windows 10 尚未实机验证。
 
@@ -75,7 +99,7 @@ Windows 在“设置 → 系统 → 系统信息（关于）→ 系统类型”�
 推荐使用 deb 包，由包管理器安装所需运行库：
 
 ```bash
-sudo apt install ./terminal-0.3.0-linux-amd64.deb
+sudo apt install ./terminal-0.4.0-linux-amd64.deb
 terminal
 ```
 
@@ -86,14 +110,14 @@ terminal
 Fedora：
 
 ```bash
-sudo dnf install ./terminal-0.3.0-linux-x86_64.rpm
+sudo dnf install ./terminal-0.4.0-linux-x86_64.rpm
 terminal
 ```
 
 openSUSE：
 
 ```bash
-sudo zypper install ./terminal-0.3.0-linux-x86_64.rpm
+sudo zypper install ./terminal-0.4.0-linux-x86_64.rpm
 terminal
 ```
 
@@ -104,14 +128,14 @@ terminal
 使用对应架构的 AppImage，以普通桌面用户启动：
 
 ```bash
-chmod +x terminal-0.3.0-linux-x86_64.AppImage
-./terminal-0.3.0-linux-x86_64.AppImage
+chmod +x terminal-0.4.0-linux-x86_64.AppImage
+./terminal-0.4.0-linux-x86_64.AppImage
 ```
 
 AppImage 可能需要 FUSE 2 兼容库（Ubuntu 22.04 为 `libfuse2`，Ubuntu 24.04 为 `libfuse2t64`）。没有 FUSE 时，可解压运行：
 
 ```bash
-./terminal-0.3.0-linux-x86_64.AppImage --appimage-extract
+./terminal-0.4.0-linux-x86_64.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 

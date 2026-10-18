@@ -59,6 +59,7 @@ export function splitLayout(pane, next, direction, resize) {
   updateControls(branch);
   updateControls(branch.parentElement);
   setRatio(50);
+  return { branch, setRatio };
 }
 
 export function removePaneLayout(pane) {

@@ -42,6 +42,7 @@
       ><button data-action="rename">重命名标签页</button
       ><button data-action="search">搜索</button
       ><button data-action="settings">设置</button
+      ><button data-action="shortcuts">快捷键设置…</button
       ><button data-action="about">关于终端</button>
     </div>
     <dialog id="about">
@@ -82,6 +83,7 @@
       <form id="settings-form">
         <h2>外观设置</h2>
         <p class="muted">实时预览 · 应用于所有标签页</p>
+        <button type="button" id="shortcuts-open">快捷键设置…</button>
         <div class="settings-group">
           <label
             >配色方案<select name="profile">
@@ -146,6 +148,40 @@
           ><button type="submit" class="primary">保存</button>
         </footer>
       </form>
+    </dialog>
+    <dialog id="shortcuts" aria-labelledby="shortcuts-title" aria-describedby="shortcuts-help">
+      <form id="shortcuts-form">
+        <div class="shortcut-header">
+          <h2 id="shortcuts-title">快捷键设置</h2>
+          <p id="shortcuts-help" class="muted">点击右侧按键，再按下新的组合键。保存后立即生效。</p>
+        </div>
+        <div id="shortcuts-list"></div>
+        <div class="shortcut-bottom">
+          <p class="muted shortcut-note">Ctrl+C 保留复制选区或中断命令，Ctrl+V 保留粘贴。清除“关闭面板或退出”后，Esc 将传给终端程序；弹窗内仍用于取消。</p>
+          <p id="shortcuts-recording" role="status" aria-live="polite"></p>
+          <p id="shortcuts-error" role="alert"></p>
+          <footer>
+            <button type="button" id="shortcuts-reset">恢复默认</button>
+            <span class="shortcut-footer-spacer"></span>
+            <button type="button" id="shortcuts-cancel">取消</button>
+            <button type="submit" id="shortcuts-save" class="primary" aria-describedby="shortcuts-error shortcuts-recording">保存快捷键</button>
+          </footer>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="recovery" aria-labelledby="recovery-title" aria-describedby="recovery-description recovery-summary">
+      <h2 id="recovery-title">恢复上次的终端？</h2>
+      <p id="recovery-description">检测到终端上次未正常关闭。可以恢复标签页、分屏、Shell 和工作目录。</p>
+      <div class="recovery-details">
+        <strong id="recovery-summary"></strong>
+        <small id="recovery-time" class="muted"></small>
+      </div>
+      <p class="muted">将重新启动 Shell，之前运行的命令和屏幕内容不会自动恢复或重放。关闭窗口可保留记录，下次再选择。</p>
+      <p id="recovery-error" role="alert"></p>
+      <footer>
+        <button type="button" id="recovery-new">新建终端</button>
+        <button type="button" id="recovery-restore" class="primary">恢复会话</button>
+      </footer>
     </dialog>
     <script src="app.bundle.js"></script>
   </body>

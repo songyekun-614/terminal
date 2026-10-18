@@ -79,6 +79,7 @@ class Sessions {
         cwd,
         pid: terminal.pid,
         label: profile.label,
+        shell: profile.id,
         busy: true,
         unacked: 0,
         paused: false,
@@ -101,13 +102,14 @@ class Sessions {
       if (process.platform === "win32")
         terminal._agent?._conoutSocketWorker?.dispose();
       this.items.delete(id);
-      this.onExit({ id, exitCode });
+      this.onExit({ id, exitCode, cwd: s.cwd, shell: s.shell });
     });
     return {
       id,
       pid: s.pid,
       cwd,
       label: s.label,
+      shell: s.shell,
       user:
         process.platform === "win32"
           ? process.env.USERNAME || os.userInfo().username

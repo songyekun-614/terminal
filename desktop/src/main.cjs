@@ -20,12 +20,17 @@ const {
   ownedWallpaper,
 } = require("./settings.cjs");
 const { Sessions } = require("./sessions.cjs");
+const { validateShortcuts } = require("./shortcuts.cjs");
+const { RecoveryStore, validateWorkspace } = require("./recovery.cjs");
 app.setName("terminal");
 Menu.setApplicationMenu(null);
 let window,
   sessions,
   root,
+  recovery,
+  recoveryWarning = "",
   closing = false;
+const paneMetadata = new Map();
 const base = path.join(__dirname, ".."),
   assets = app.isPackaged
     ? path.join(process.resourcesPath, "app.asar.unpacked", "assets")
@@ -164,6 +169,25 @@ function imageData(file) {
     return null;
   }
 }
+function recoverySummary() {
+  let panes = 0;
+  function count(node) { if (node.type === "pane") panes++; else { count(node.first); count(node.second); } }
+  for (const tab of recovery.workspace.tabs) count(tab.layout);
+  return { tabs: recovery.workspace.tabs.length, panes, updatedAt: recovery.updatedAt };
+}
+function saveWorkspace(value) {
+  if (!recovery || recovery.closed) return false;
+  const workspace = validateWorkspace(value);
+  function enrich(node) {
+    if (node.type === "split") { enrich(node.first); enrich(node.second); return; }
+    const live = sessions.items.get(node.id), known = paneMetadata.get(node.id);
+    if (!known) throw Error("无法保存不存在的终端会话");
+    node.cwd = live ? sessions.info(node.id).cwd : known.cwd;
+    node.shell = live?.shell || known.shell;
+  }
+  for (const tab of workspace.tabs) enrich(tab.layout);
+  return recovery.save(workspace);
+}
 function installHandlers() {
   handle("bootstrap", async () => ({
     settings: {
@@ -177,13 +201,22 @@ function installHandlers() {
     platform: process.platform,
     user: os.userInfo().username,
     host: os.hostname(),
+    recovery: recovery?.pending ? recoverySummary() : null,
+    recoveryWarning,
   }));
-  handle("createSession", (options) => sessions.create(options));
+  handle("createSession", (options) => {
+    const info = sessions.create(options);
+    paneMetadata.set(info.id, { cwd: info.cwd, shell: info.shell });
+    return info;
+  });
+  handle("saveWorkspace", saveWorkspace);
+  handle("getRecovery", () => recovery?.pending ? recovery.workspace : null);
+  handle("discardRecovery", () => { recovery?.discardPending(); return true; });
   handle("write", (id, data) => sessions.write(id, data));
   handle("resize", (id, cols, rows) => sessions.resize(id, cols, rows));
   handle("ack", (id, bytes) => sessions.ack(id, bytes));
   handle("sessionInfo", (id) => sessions.info(id));
-  handle("closeSession", (id) => sessions.close(id));
+  handle("closeSession", async (id) => { await sessions.close(id); paneMetadata.delete(id); });
   handle("confirmClose", confirmClose);
   handle("readClipboard", () => clipboard.readText());
   handle("writeClipboard", (text) => {
@@ -222,7 +255,11 @@ function installHandlers() {
     stagedImages.add(destination);
     return { path: destination, url };
   });
+  handle("saveShortcuts", (value) => saveSettings(root, {
+    ...readSettings(root), shortcuts: validateShortcuts(value),
+  }).shortcuts);
   handle("saveSettings", (value) => {
+    if (value && Object.hasOwn(value, "shortcuts")) validateShortcuts(value.shortcuts);
     const normalized = normalizeSettings(value);
     if (normalized.wallpaper && !imageData(normalized.wallpaper))
       normalized.wallpaper = null;
@@ -264,6 +301,13 @@ app
     fs.mkdirSync(root, { recursive: true });
     if (!fs.existsSync(path.join(root, "settings.json")))
       saveSettings(root, readSettings(root));
+    try {
+      recovery = new RecoveryStore(root);
+      recovery.begin();
+    } catch (err) {
+      recovery = null;
+      recoveryWarning = `无法启用异常退出恢复：${err.message}`;
+    }
     window = new BrowserWindow({
       width: 1100,
       height: 720,
@@ -290,6 +334,7 @@ app
           window.webContents.send("terminal:output", value);
       },
       onExit: (value) => {
+        if (paneMetadata.has(value.id)) paneMetadata.set(value.id, { cwd: value.cwd, shell: value.shell });
         if (!window.isDestroyed())
           window.webContents.send("terminal:exit", value);
       },
@@ -315,6 +360,7 @@ app
         .then((ok) => {
           window._confirming = false;
           if (ok) {
+            try { recovery?.finishClean(); } catch (err) { console.error("Recovery cleanup failed:", err.message); }
             closing = true;
             window.close();
           }
@@ -334,7 +380,7 @@ app
     window.webContents.on(
       "did-start-navigation",
       (_, __, isInPlace, isMainFrame) => {
-        if (loaded && isMainFrame && !isInPlace) sessions.dispose();
+        if (loaded && isMainFrame && !isInPlace) { sessions.dispose(); paneMetadata.clear(); }
       },
     );
     window.once("ready-to-show", () => window.show());

@@ -156,25 +156,9 @@ jobs:
               }
             fi
           fi
-          cat > release-notes.md <<'NOTES'
-          Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
-
-          - 新增左右/上下嵌套分屏；每个面板运行独立 shell，新面板继承当前面板目录。
-          - 支持点击与快捷键切换面板、拖动或键盘调整分隔线，关闭面板后自动合并布局。
-          - 复制、粘贴与搜索作用于当前面板；延迟粘贴保留原面板归属，标签切换不会抢回焦点。
-          - 采用 B 版分屏：12px 圆角、2px 接缝、12px 拖动区域；修复细接缝抓取与拖动跳变。
-          - 关闭任何标签页及退出窗口始终确认，包括空闲会话；单独关闭忙碌面板时确认。
-          - 修复标签过多时工具栏遮挡，以及重命名后的输入焦点和中文输入切换问题。
-          - 修复异步创建/关闭与焦点切换竞态，保留已有字体及原生确认窗口样式。
-          - Ctrl+Shift+H 左右分屏，Ctrl+Shift+J 上下分屏，Ctrl+Shift+O 切换面板，Ctrl+Shift+X 关闭面板。
-          - Esc 优先取消弹窗、菜单和搜索，再关闭当前面板；最后一个标签页的最后一个面板关闭时退出。Esc 仍会拦截 Vim 等终端程序的同名按键。
-          - 保留已有外观与代理设置；分屏布局暂不跨启动保存。
-          - 四个平台均完成服务测试、界面测试和打包后回归测试。
-
-          下载与系统架构一致的文件：Windows 使用 setup.exe 或 zip；Debian / Ubuntu 使用 deb；Fedora / openSUSE 使用 rpm；其他 Linux 桌面可使用 AppImage。
-          安装步骤见仓库 README。安装包无需 Node.js 或 Python。Windows 安装包未签名；macOS 暂无安装包。
-          SHA256SUMS 提供安装包校验值。
-          NOTES
+          notes="docs/releases/${version}.md"
+          test -s "$notes"
+          cp "$notes" release-notes.md
           printf '\n源码提交：%s\n构建记录：https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
           if gh release view "$tag" --json isDraft,targetCommitish > existing-release.json 2>/dev/null; then
             if [[ "$refresh" != 'true' ]]; then
