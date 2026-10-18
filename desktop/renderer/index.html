@@ -13,25 +13,32 @@
   </head>
   <body>
     <header>
-      <div class="window-controls">
+      <div class="window-controls" role="group" aria-label="窗口操作">
         <button class="traffic close" aria-label="关闭窗口">×</button
         ><button class="traffic minimize" aria-label="最小化">−</button
         ><button class="traffic maximize" aria-label="最大化">+</button>
       </div>
       <div class="heading">
-        <strong>Stay focused</strong><small>Start with a command</small>
+        <strong>terminal</strong><small>本地终端</small>
       </div>
-      <nav>
-        <button id="new" aria-label="新建标签页">＋</button
-        ><button id="search-open">搜索</button
-        ><button id="settings-open">设置</button
+      <nav aria-label="终端工具">
+        <button id="new" aria-label="新建标签页" title="新建标签页">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button
+        ><button id="search-open" aria-label="搜索" title="搜索">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        </button
+        ><button id="settings-open" aria-label="设置" title="设置">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg>
+        </button
         ><button
           id="menu-open"
           aria-label="更多操作"
           aria-expanded="false"
           popovertarget="menu"
+          title="更多操作"
         >
-          ⌄
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>
         </button>
       </nav>
     </header>
@@ -56,16 +63,28 @@
     <div class="tabs-row">
       <div id="tabs" role="tablist" aria-label="终端标签页"></div>
       <div id="pane-tools" role="toolbar" aria-label="分屏操作">
-        <button id="split-horizontal" title="左右分屏 · Ctrl+Shift+H" aria-keyshortcuts="Control+Shift+H">左右分屏</button>
-        <button id="split-vertical" title="上下分屏 · Ctrl+Shift+J" aria-keyshortcuts="Control+Shift+J">上下分屏</button>
-        <button id="next-pane" title="切换面板 · Ctrl+Shift+O" aria-keyshortcuts="Control+Shift+O">切换面板</button>
+        <button id="split-horizontal" title="左右分屏 · Ctrl+Shift+H" aria-keyshortcuts="Control+Shift+H" aria-label="左右分屏"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M12 5v14"/></svg></button>
+        <button id="split-vertical" title="上下分屏 · Ctrl+Shift+J" aria-keyshortcuts="Control+Shift+J" aria-label="上下分屏"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M3.5 12h17"/></svg></button>
+        <button id="next-pane" title="切换面板 · Ctrl+Shift+O" aria-keyshortcuts="Control+Shift+O" aria-label="切换面板"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><path d="M12 5v14m2-10 3 3-3 3m-7-6 3 3-3 3"/></svg></button>
       </div>
     </div>
-    <form id="search" hidden>
-      <label>搜索内容 <input id="query" aria-label="搜索内容" /></label
-      ><button type="submit">下一个</button
-      ><button type="button" id="search-prev">上一个</button
-      ><button type="button" id="search-close" aria-label="关闭搜索">×</button>
+    <form id="search" role="search" aria-label="搜索当前面板" hidden>
+      <div class="search-field">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <input id="query" aria-label="搜索内容" placeholder="搜索当前面板…" autocomplete="off" spellcheck="false" />
+        <kbd aria-hidden="true">↵</kbd>
+      </div>
+      <div class="search-navigation" role="group" aria-label="搜索导航">
+        <button type="button" id="search-prev" aria-label="上一个" title="上一个匹配项">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 14 6-6 6 6"/></svg>
+        </button>
+        <button type="submit" aria-label="下一个" title="下一个匹配项 · Enter">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 10 6 6 6-6"/></svg>
+        </button>
+      </div>
+      <button type="button" id="search-close" aria-label="关闭搜索" title="关闭搜索 · Esc">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m7 7 10 10M7 17 17 7"/></svg>
+      </button>
     </form>
     <div id="status" role="status" aria-live="polite"></div>
     <main id="terminals"></main>
@@ -94,8 +113,11 @@
           ><label
             >字体<input
               name="font_family"
-              list="font-list"
-              maxlength="100" /><datalist id="font-list"></datalist></label
+              maxlength="100" /></label
+          ><label
+            >可选字体<select id="font-list">
+              <option value="">选择已安装字体</option>
+            </select></label
           ><label
             >字体大小<input
               name="font_size"

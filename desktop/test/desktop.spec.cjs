@@ -3,6 +3,30 @@ const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
 let app, page, root;
+test("font choices preview, cancel and save while preserving custom font input", async () => {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  const choice = page.getByRole("combobox", { name: "可选字体", exact: true });
+  const input = page.getByLabel("字体", { exact: true });
+  await expect(choice).toBeVisible();
+  const original = await input.inputValue();
+  const options = await choice.locator("option").evaluateAll(nodes => nodes.map(n => n.value).filter(Boolean));
+  const chosen = options.find(name => name !== original);
+  expect(chosen).toBeTruthy();
+  await choice.selectOption(chosen);
+  await expect(input).toHaveValue(chosen);
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await expect(input).toHaveValue(original);
+  await choice.selectOption(chosen);
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(root, "settings.json"), "utf8")).font_family).toBe(chosen);
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await expect(choice).toHaveValue(chosen);
+  await input.fill("Custom Mono, monospace");
+  await expect(choice).toHaveValue("");
+  await page.getByRole("button", { name: "保存", exact: true }).click();
+  await expect.poll(() => JSON.parse(fs.readFileSync(path.join(root, "settings.json"), "utf8")).font_family).toBe("Custom Mono, monospace");
+});
 test.beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-ui-"));
   app = await electron.launch({
@@ -497,7 +521,7 @@ test("clipboard shortcuts in editable fields do not paste into the terminal", as
 });
 
 test("real PTY Unicode, tabs, settings, search and busy close", async () => {
-  await expect(page.getByText("Stay focused", { exact: true })).toBeVisible();
+  await expect(page.locator("header .heading strong")).toHaveText("terminal");
   await expect(page.getByRole("tab")).toHaveCount(1);
   await page.locator(".terminal-pane.active .xterm-helper-textarea").focus();
   await app.evaluate(

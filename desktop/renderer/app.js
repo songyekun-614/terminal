@@ -511,6 +511,7 @@ function populate() {
     "wallpaper_opacity",
   ])
     form.elements[name].value = settings[name] ?? "";
+  $("font-list").value = settings.font_family;
   $("settings-error").textContent = "";
 }
 $("settings-open").onclick = () => {
@@ -519,7 +520,10 @@ $("settings-open").onclick = () => {
   populate();
   $("settings").showModal();
 };
-form.oninput = () => {
+form.oninput = (event) => {
+  if (event?.target === $("font-list") && $("font-list").value)
+    form.elements.font_family.value = $("font-list").value;
+  $("font-list").value = form.elements.font_family.value;
   try {
     apply(values());
     $("settings-error").textContent = "";
