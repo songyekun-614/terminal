@@ -1123,10 +1123,19 @@ function savedRecoveryWorkspace() {
   } catch { return null; }
 }
 async function crashTerminal() {
-  const process = app.process();
-  const exited = new Promise(resolve => process.once("exit", resolve));
-  process.kill("SIGKILL");
+  const child = app.process();
+  // Playwright launches Electron through cmd.exe on Windows. Killing only
+  // child leaves the actual app alive, so its checkpoint must not be recovered.
+  const ownerPid = await app.evaluate(() => process.pid);
+  const exited = new Promise(resolve => child.once("exit", resolve));
+  if (process.platform === "win32") {
+    require("node:child_process").execFileSync("taskkill", ["/PID", String(ownerPid), "/T", "/F"], { windowsHide: true });
+  } else child.kill("SIGKILL");
   await exited;
+  await expect.poll(() => {
+    try { process.kill(ownerPid, 0); return true; }
+    catch (error) { if (error.code === "ESRCH") return false; throw error; }
+  }).toBe(false);
 }
 
 test("crash recovery restores nested splits, tab names, focus and directories without replaying commands", async () => {
