@@ -2,7 +2,7 @@
 
 一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。
 
-本次版本为 **[0.4.0](https://github.com/songyekun-614/terminal/releases/tag/v0.4.0)**，新增自定义快捷键与异常退出恢复。发布工作流在 Windows / Linux 的 x64、ARM64 四个平台验证后提供 10 个安装包及 `SHA256SUMS`。
+当前正式版本为 **[0.4.0](https://github.com/songyekun-614/terminal/releases/tag/v0.4.0)**，新增自定义快捷键与异常退出恢复。已通过 Windows / Linux 的 x64、ARM64 四个平台验证，提供 10 个安装包及 `SHA256SUMS`。
 
 沿用 B 版分屏设计：12px 圆角、2px 接缝和 12px 拖动区域。关闭任意标签页及退出窗口都会先确认，空闲会话也会提醒。
 
@@ -57,7 +57,7 @@
 
 [发布工作流](https://github.com/songyekun-614/terminal/actions/workflows/desktop.yml)在 Ubuntu x64 / ARM64、Windows x64 / ARM64 四个原生环境依次执行服务测试、真实 PTY / ConPTY 界面测试、安装包构建和打包后回归，全部通过才发布。IBus 中文输入专项需要额外桌面环境，不属于常规 CI 验证范围。
 
-本次本地 Linux x64 验证：服务测试 32 项通过、1 项 Windows 专项跳过；实际安装版本界面测试 46 项通过、1 项 IBus 专项跳过。功能范围及故障注入测试见[快捷键验证](docs/2026-10-18-shortcuts-verification.md)与[异常恢复验证](docs/2026-10-18-recovery-verification.md)。各平台最终发布结果以相应工作流记录为准。
+本次本地 Linux x64 验证：服务测试 32 项通过、1 项 Windows 专项跳过；实际安装版本界面测试 46 项通过、1 项 IBus 专项跳过。功能范围及故障注入测试见[快捷键验证](docs/2026-10-18-shortcuts-verification.md)与[异常恢复验证](docs/2026-10-18-recovery-verification.md)。0.4.0 的[发布工作流](https://github.com/songyekun-614/terminal/actions/runs/39109580777)已全部通过，详细结果见[发布验证记录](docs/2026-10-18-release-0.4.0-verification.md)。
 
 Windows 安装包未签名，Windows 10、Fedora、Arch、openSUSE 尚需实机验证；安装、升级和卸载生命周期尚未完成验证。目前没有 macOS 安装包；SSH 管理、正常退出后的工作区自动恢复和在线更新尚未交付。各版本功能以对应 Release 发布说明为准。
 
