@@ -184,6 +184,13 @@ test("overflowing tabs stay outside the split toolbar", async () => {
   expect(boxes.tabsRight).toBeLessThanOrEqual(boxes.toolsLeft);
   await page.getByRole("button", { name: "左右分屏", exact: true }).click();
   await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  // PowerShell initializes asynchronously. Finish this layout check with live,
+  // ready PTYs instead of racing application teardown against 15 new shells.
+  await expect.poll(() => page.evaluate(async () => {
+    const ids = [...document.querySelectorAll(".terminal-pane")].map(pane => pane.id.slice(9));
+    const states = await Promise.all(ids.map(id => window.terminalAPI.sessionInfo(id)));
+    return states.length === 16 && states.every(state => !state.busy);
+  }), { timeout: 30000 }).toBe(true);
 });
 
 test("closing while a split session is being created cannot orphan its PTY", async () => {
