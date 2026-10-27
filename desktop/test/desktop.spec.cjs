@@ -3,6 +3,125 @@ const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
 let app, page, root;
+test("text typed into ANSI-styled CLI input stays readable on dark and light panels", async () => {
+  const cases = [
+    { profile: "Pro", sgr: "48;2;0;0;0;38;2;12;12;12" },
+    { profile: "Homebrew", sgr: "40;30" },
+    { profile: "Basic", sgr: "40;39" },
+    { profile: "Basic", sgr: "48;2;245;245;245;38;2;240;240;240" },
+  ];
+  for (const [index, fixture] of cases.entries()) {
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.locator('[name="profile"]').selectOption(fixture.profile);
+    await page.locator('#settings-form button[type="submit"]').click();
+    await waitForIdleTerminal();
+    const prompt = `CLI_${index}_ready> `;
+    const command = process.platform === "win32"
+      ? `[Console]::Write([char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
+      : `printf '\\033[${fixture.sgr}m${prompt}'; IFS= read -r answer; printf '\\033[0m\\nINPUT:%s\\n' "$answer"`;
+    await page.keyboard.type(command);
+    await page.keyboard.press("Enter");
+    // The prompt echo in the shell command is not proof the reader is ready.
+    await expect.poll(() => page.locator('.xterm-rows').evaluate((el, text) =>
+      el.textContent.split(text).length - 1, prompt)).toBe(2);
+    const typed = `cli_input_${index}`;
+    const submitted = `${typed}_你好`;
+    await page.keyboard.type(submitted);
+    const cell = page.locator('.xterm-rows span').filter({ hasText: typed }).last();
+    await expect(cell).toBeVisible();
+    function light(rgb) {
+      const v = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(c => c / 255)
+        .map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return v[0] * 0.2126 + v[1] * 0.7152 + v[2] * 0.0722;
+    }
+    await expect.poll(async () => {
+      const colors = await cell.evaluate(el => {
+        if (!el.isConnected) return null;
+        const style = getComputedStyle(el);
+        return { foreground: style.color, background: style.backgroundColor };
+      });
+      // xterm replaces spans while processing the final Unicode input cells.
+      if (!colors?.foreground || !colors.background) return 0;
+      const fg = light(colors.foreground), bg = light(colors.background);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    }, { message: `${fixture.profile} ${fixture.sgr}: typed text` }).toBeGreaterThanOrEqual(4.5);
+    await page.keyboard.press("Enter");
+    await expect(page.locator('.xterm-screen')).toContainText(`INPUT:${submitted}`);
+    await waitForIdleTerminal();
+  }
+});
+
+test("light wallpaper panels keep normal shell text readable with contrast protection", async () => {
+  await app.evaluate(({ dialog }, source) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [source] });
+  }, path.join(__dirname, "../assets/icon.png"));
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.locator('[name="profile"]').selectOption("Basic");
+  await page.getByRole("button", { name: "导入壁纸", exact: true }).click();
+  await expect(page.locator("body")).toHaveClass(/has-wallpaper/);
+  await page.locator('[name="wallpaper_opacity"]').focus();
+  await page.keyboard.press("End");
+  await expect(page.locator('[name="wallpaper_opacity"]')).toHaveValue("1");
+  await page.locator('#settings-form button[type="submit"]').click();
+  await page.keyboard.type(process.platform === "win32"
+    ? "Write-Output ('wallpaper-' + 'readable')" : "printf '%s\\n' 'wallpaper-'readable");
+  await page.keyboard.press("Enter");
+  const cell = page.locator('.xterm-rows span').filter({ hasText: "wallpaper-readable" }).last();
+  await expect(cell).toBeVisible();
+  const ratio = await cell.evaluate(el => {
+    function light(values) {
+      const c = values.map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+    }
+    const fg = light(getComputedStyle(el).color.match(/[\d.]+/g).slice(0, 3).map(Number));
+    const hex = getComputedStyle(document.body).getPropertyValue("--terminal-bg").trim();
+    const bg = light([1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)));
+    return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+  });
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
+});
+
+test("form fields and copied text remain readable across profiles and background presets", async () => {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  const profile = page.locator('[name="profile"]');
+  const background = page.locator('[name="background"]');
+  for (const name of ["Pro", "Basic", "Homebrew"]) {
+    await profile.selectOption(name);
+    for (const color of ["#17191e", "#121e32", "#13251c", "#2b211e", "#2d1b24", "#10282a", "#faf9f7", "#eceff3", "#e7f0fa", "#e8f2eb"]) {
+      await background.fill(color);
+      const metrics = await page.locator('#settings input:not([type="range"]), #settings select').evaluateAll(fields => {
+        function light(rgb) {
+          const values = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255)
+            .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+        }
+        function contrast(a, b) { const first = light(a), second = light(b); return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05); }
+        return fields.map(field => {
+          const style = getComputedStyle(field), selection = getComputedStyle(field, "::selection");
+          let parent = field.parentElement, outside;
+          while (parent) {
+            const background = getComputedStyle(parent).backgroundColor;
+            if (!background.startsWith("rgba(") || !/[,/]\s*0\s*\)$/.test(background)) { outside = background; break; }
+            parent = parent.parentElement;
+          }
+          return { text: contrast(style.color, style.backgroundColor), border: contrast(style.borderTopColor, style.backgroundColor),
+            outsideBorder: contrast(style.borderTopColor, outside),
+            selection: field.tagName === "INPUT" ? contrast(selection.color, selection.backgroundColor) : null };
+        });
+      });
+      expect(metrics.length).toBeGreaterThan(3);
+      for (const field of metrics) {
+        expect(field.text, `${name} ${color}: input text`).toBeGreaterThanOrEqual(4.5);
+        expect(field.border, `${name} ${color}: input boundary`).toBeGreaterThanOrEqual(3);
+        expect(field.outsideBorder, `${name} ${color}: boundary against surrounding surface`).toBeGreaterThanOrEqual(3);
+        if (field.selection !== null) expect(field.selection, `${name} ${color}: copied text`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+  await page.locator("#settings-cancel").click();
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
 test("font choices preview, cancel and save while preserving custom font input", async () => {
   await page.getByRole("button", { name: "设置", exact: true }).click();
   const choice = page.getByRole("combobox", { name: "可选字体", exact: true });

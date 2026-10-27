@@ -155,6 +155,7 @@ function apply(value) {
   updateShortcutHints();
   const p = palette(settings);
   document.body.style.setProperty("--terminal-bg", p.background);
+  document.body.dataset.profile = settings.profile;
   document.body.classList.toggle("light", settings.profile === "Basic");
   document.body.classList.toggle("has-wallpaper", Boolean(wallpaperURL));
   document.body.style.setProperty(
@@ -168,7 +169,8 @@ function apply(value) {
   for (const s of sessions.values()) {
     s.term.options.theme = {
       ...p,
-      background: wallpaperURL ? "#00000000" : p.background,
+      // Preserve the panel RGB for contrast calculations while alpha shows wallpaper.
+      background: wallpaperURL ? `${p.background}00` : p.background,
     };
     s.term.options.fontFamily = settings.font_family;
     s.term.options.fontSize = Number(settings.font_size);
@@ -288,6 +290,7 @@ async function createPane(group, parent = current(), direction, restored) {
   else group.root.append(pane);
   const term = new Terminal({
     allowTransparency: true, theme: palette(settings),
+    minimumContrastRatio: 4.5,
     fontFamily: settings.font_family, fontSize: Number(settings.font_size),
     cursorBlink: true, scrollback: 10000,
   });

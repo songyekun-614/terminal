@@ -27,6 +27,14 @@ function luminance(c) {
     .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
     .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
 }
+function contrast(first, second) {
+  const a = luminance(first), b = luminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+const selections = [
+  { selectionBackground: "#aecbeb", selectionForeground: "#142a42", selectionInactiveBackground: "#94aec9" },
+  { selectionBackground: "#31577c", selectionForeground: "#f6faff", selectionInactiveBackground: "#3b5068" },
+];
 export function palette(settings) {
   const p = { ...(profiles[settings.profile] || profiles.Pro) };
   const bg = color(settings.background);
@@ -41,5 +49,9 @@ export function palette(settings) {
       )[0];
     p.cursor = p.foreground;
   }
-  return p;
+  // Use opaque, paired colors so ANSI text and wallpaper cannot wash out a
+  // selection. Choose against the actual background, including custom colors.
+  const selection = selections.reduce((best, candidate) =>
+    contrast(candidate.selectionBackground, p.background) > contrast(best.selectionBackground, p.background) ? candidate : best);
+  return { ...p, ...selection };
 }
