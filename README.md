@@ -2,6 +2,8 @@
 
 一款支持 Windows 和 Linux 的独立终端。默认使用 `desktop/` 中的 Electron + xterm.js + node-pty 版本，运行真实的本地 shell，提供标签页、左右/上下分屏、中文外观设置和壁纸。Windows 使用 PowerShell / cmd，Linux 使用用户 shell。SSH 暂停开发。
 
+当前发布分支源码已修正 Esc 与 CLI 的冲突：终端内 `Esc` 交给 Shell 或前台程序，不再关闭面板、标签页或窗口；弹窗、菜单和搜索仍用 Esc 取消。关闭当前面板用 `Ctrl+Shift+X`，关闭标签页用 `Ctrl+Shift+W`。此说明针对修正后的源码，历史安装包需等待重新构建后才包含该修复。
+
 ## Windows / Linux 安装
 
 日常使用安装包不需要安装 Node.js 或 Python。需要图形桌面；终端运行系统已有的 shell。

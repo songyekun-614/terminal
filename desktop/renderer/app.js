@@ -4,6 +4,8 @@ import { SearchAddon } from "@xterm/addon-search";
 import { palette, profiles, presets, color } from "./appearance.js";
 import { installPrompt, recolorPrompt } from "./prompt.js";
 import { splitLayout, removePaneLayout } from "./splits.js";
+import escapeModel from "../src/escape.cjs";
+const { escapeAction } = escapeModel;
 const api = window.terminalAPI,
   $ = (id) => document.getElementById(id),
   sessions = new Map(),
@@ -19,7 +21,6 @@ let settings,
   preferencesEpoch = 0;
 const bytes = new TextEncoder();
 let savedFontSize = 12;
-let escapePending = false;
 let closingLayout = false;
 function error(err) {
   $("status").textContent = `错误：${err.message || err}`;
@@ -572,25 +573,22 @@ $("menu").onclick = guard(async (event) => {
 document.addEventListener(
   "keydown",
   guard(async (event) => {
-    if (
-      event.key === "Escape" && !event.ctrlKey && !event.altKey &&
-      !event.metaKey && !event.shiftKey && !event.isComposing
-    ) {
+    const dialog = document.querySelector("dialog[open]");
+    const escape = escapeAction(event, {
+      dialog: Boolean(dialog),
+      menu: $("menu").matches(":popover-open"),
+      search: !$("search").hidden,
+    });
+    if (escape) {
       event.preventDefault();
       event.stopPropagation();
-      if (event.repeat || escapePending) return;
-      escapePending = true;
-      try {
-        const dialog = document.querySelector("dialog[open]");
-        if (dialog) dialog.close("cancel");
-        else if ($("menu").matches(":popover-open")) {
-          $("menu").hidePopover();
-          current()?.term.focus();
-        } else if (!$("search").hidden) hideSearch();
-        else if (active) await closePane(active, { closeWindow: true });
-      } finally {
-        escapePending = false;
+      if (event.repeat) return;
+      if (escape === "dialog") dialog.close("cancel");
+      else if (escape === "menu") {
+        $("menu").hidePopover();
+        current()?.term.focus();
       }
+      else hideSearch();
       return;
     }
     if (document.querySelector("dialog[open]")) return;
