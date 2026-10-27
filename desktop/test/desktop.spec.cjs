@@ -19,7 +19,7 @@ test("text typed into ANSI-styled CLI input stays readable on dark and light pan
     await waitForIdleTerminal();
     const prompt = `CLI_${index}_ready> `;
     const command = process.platform === "win32"
-      ? `[Console]::Write([char]27+'[2J'+[char]27+'[H'+[char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
+      ? `[Console]::InputEncoding=[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); [Console]::Write([char]27+'[2J'+[char]27+'[H'+[char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
       : `printf '\\033[2J\\033[H\\033[${fixture.sgr}m${prompt}'; IFS= read -r answer; printf '\\033[0m\\nINPUT:%s\\n' "$answer"`;
     await page.keyboard.type(command);
     await page.keyboard.press("Enter");
@@ -66,6 +66,9 @@ test("light wallpaper panels keep normal shell text readable with contrast prote
   await page.keyboard.press("End");
   await expect(page.locator('[name="wallpaper_opacity"]')).toHaveValue("1");
   await page.locator('#settings-form button[type="submit"]').click();
+  await expect(page.locator('#settings')).not.toBeVisible();
+  await expect(page.locator('.terminal-pane.active .xterm-helper-textarea')).toBeFocused();
+  await waitForIdleTerminal();
   await page.keyboard.type(process.platform === "win32"
     ? "Write-Output ('wallpaper-' + 'readable')" : "printf '%s\\n' 'wallpaper-'readable");
   await page.keyboard.press("Enter");

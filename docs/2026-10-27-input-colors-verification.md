@@ -31,3 +31,13 @@
 用清屏控制序列移除命令回显后，本地复现了相同的计数失败。测试改为检查真实提示行；追踪还发现保存设置后过早打字会丢失命令开头，因此增加对设置窗口关闭和终端焦点恢复的等待。对比度和中文输入往返断言保留，产品代码未修改。
 
 修正后执行 `cd desktop && npm run test:e2e -- --grep 'text typed into ANSI-styled' --repeat-each=3 --trace retain-on-failure`，连续 3 次通过。最终四平台结果以更新后提交的工作流为准。
+
+## Windows 测试脚本修正
+
+[第二轮工作流](https://github.com/songyekun-614/terminal/actions/runs/40507169770)中，两个 Linux 架构的服务测试、源码界面回归、安装包构建及打包后回归均成功，两轮界面回归各为 52 通过、1 跳过。
+
+两个 Windows 架构的 ANSI 输入测试均能显示输入的中文，但 `.NET Console` 输出回传内容为 `INPUT:cli_input_0_??`；壁纸测试未等到预期命令输出。Windows x64 还出现 15 标签页及最后恢复用例的退出清理超时，ARM64 未出现这两项超时。
+
+测试脚本显式设置 `Console.InputEncoding` 和 `Console.OutputEncoding` 为 UTF-8，并为壁纸用例增加设置窗口关闭、终端焦点和 shell 空闲等待。Console 编码说明见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/console/console-code-pages)。中文内容与对比度断言保留，退出清理超时继续如实记录。
+
+本地执行 `cd desktop && npm run test:e2e -- --grep 'text typed into ANSI-styled|light wallpaper panels' --repeat-each=3 --trace retain-on-failure`，6 项通过；Windows 脚本分支需由后续原生 CI 验证。
