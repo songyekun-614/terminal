@@ -14,16 +14,19 @@ test("text typed into ANSI-styled CLI input stays readable on dark and light pan
     await page.getByRole("button", { name: "设置", exact: true }).click();
     await page.locator('[name="profile"]').selectOption(fixture.profile);
     await page.locator('#settings-form button[type="submit"]').click();
+    await expect(page.locator('#settings')).not.toBeVisible();
+    await expect(page.locator('.terminal-pane.active .xterm-helper-textarea')).toBeFocused();
     await waitForIdleTerminal();
     const prompt = `CLI_${index}_ready> `;
     const command = process.platform === "win32"
-      ? `[Console]::Write([char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
-      : `printf '\\033[${fixture.sgr}m${prompt}'; IFS= read -r answer; printf '\\033[0m\\nINPUT:%s\\n' "$answer"`;
+      ? `[Console]::Write([char]27+'[2J'+[char]27+'[H'+[char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
+      : `printf '\\033[2J\\033[H\\033[${fixture.sgr}m${prompt}'; IFS= read -r answer; printf '\\033[0m\\nINPUT:%s\\n' "$answer"`;
     await page.keyboard.type(command);
     await page.keyboard.press("Enter");
-    // The prompt echo in the shell command is not proof the reader is ready.
+    // Clear command echoes and wait for the actual reader prompt. Shell echo
+    // and line wrapping vary by platform and must not determine readiness.
     await expect.poll(() => page.locator('.xterm-rows').evaluate((el, text) =>
-      el.textContent.split(text).length - 1, prompt)).toBe(2);
+      [...el.children].some(row => row.textContent.trimEnd() === text.trimEnd()), prompt)).toBe(true);
     const typed = `cli_input_${index}`;
     const submitted = `${typed}_你好`;
     await page.keyboard.type(submitted);

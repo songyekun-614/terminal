@@ -23,3 +23,11 @@
 ## 验证边界
 
 本地结果仅证明以上执行环境与测试范围。IBus 输入法专项、GTK 桌面专项和其他操作系统未由本地测试验证。Windows / Linux x64、ARM64 的原生构建、界面回归及打包回归以本次 PR 对应的 GitHub Actions 结果为准。此次源码同步不更新既有 Release 标签或安装包。
+
+## CI 等待条件修正
+
+[PR #8](https://github.com/songyekun-614/terminal/pull/8) 的[首轮工作流](https://github.com/songyekun-614/terminal/actions/runs/40506354245)中，两个 Linux 架构均在 ANSI 输入测试的提示计数处失败：要求出现 2 次提示文本，实际只有 1 次。其余 51 项通过、IBus 专项跳过。
+
+用清屏控制序列移除命令回显后，本地复现了相同的计数失败。测试改为检查真实提示行；追踪还发现保存设置后过早打字会丢失命令开头，因此增加对设置窗口关闭和终端焦点恢复的等待。对比度和中文输入往返断言保留，产品代码未修改。
+
+修正后执行 `cd desktop && npm run test:e2e -- --grep 'text typed into ANSI-styled' --repeat-each=3 --trace retain-on-failure`，连续 3 次通过。最终四平台结果以更新后提交的工作流为准。
