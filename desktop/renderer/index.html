@@ -52,11 +52,13 @@
         <footer><button>关闭</button></footer>
       </form>
     </dialog>
-    <div id="tabs" role="tablist" aria-label="终端标签页"></div>
-    <div id="pane-tools" role="toolbar" aria-label="分屏操作">
-      <button id="split-horizontal" title="左右分屏 · Ctrl+Shift+H" aria-keyshortcuts="Control+Shift+H">左右分屏</button>
-      <button id="split-vertical" title="上下分屏 · Ctrl+Shift+J" aria-keyshortcuts="Control+Shift+J">上下分屏</button>
-      <button id="next-pane" title="切换面板 · Ctrl+Shift+O" aria-keyshortcuts="Control+Shift+O">切换面板</button>
+    <div class="tabs-row">
+      <div id="tabs" role="tablist" aria-label="终端标签页"></div>
+      <div id="pane-tools" role="toolbar" aria-label="分屏操作">
+        <button id="split-horizontal" title="左右分屏 · Ctrl+Shift+H" aria-keyshortcuts="Control+Shift+H">左右分屏</button>
+        <button id="split-vertical" title="上下分屏 · Ctrl+Shift+J" aria-keyshortcuts="Control+Shift+J">上下分屏</button>
+        <button id="next-pane" title="切换面板 · Ctrl+Shift+O" aria-keyshortcuts="Control+Shift+O">切换面板</button>
+      </div>
     </div>
     <form id="search" hidden>
       <label>搜索内容 <input id="query" aria-label="搜索内容" /></label
@@ -71,8 +73,8 @@
         <h2>重命名标签页</h2>
         <label>标签名称<input id="tab-name" maxlength="80" /></label>
         <footer>
-          <button value="cancel">取消</button
-          ><button value="save" class="primary">重命名</button>
+          <button type="button" value="cancel">取消</button
+          ><button type="submit" value="save" class="primary">重命名</button>
         </footer>
       </form>
     </dialog>

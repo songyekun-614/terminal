@@ -14,6 +14,11 @@ test.beforeEach(async () => {
     env: { ...process.env, TERMINAL_CONFIG_ROOT: root },
   });
   page = await app.firstWindow();
+  // Native confirmations are outside the renderer; act as a user choosing Close
+  // unless a test explicitly exercises cancellation or a pending confirmation.
+  await app.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () => ({ response: 1 });
+  });
   try {
     await expect(page.getByRole("tab")).toHaveCount(1, { timeout: 15000 });
     await waitForIdleTerminal();
@@ -57,7 +62,8 @@ test("nested splits resize with pointer and keyboard and collapse on pane close"
   const first = page.locator(".terminal-pane").first();
   const before = await first.boundingBox();
   const handle = await separator.boundingBox();
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  // Grab just outside the visible seam: narrow dividers must stay easy to drag.
+  await page.mouse.move(handle.x + handle.width / 2 - 5, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(handle.x + 80, handle.y + handle.height / 2);
   await page.mouse.up();
@@ -111,6 +117,29 @@ test("tabs hide whole split layouts and restore the last focused pane", async ()
   await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
 });
 
+test("closing an idle split tab always confirms and cancellation keeps every PTY", async () => {
+  await page.keyboard.press("Control+Shift+H");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await waitForIdleTerminal();
+  const ids = await page.locator(".terminal-pane").evaluateAll(es => es.map(e => e.id.slice(9)));
+  await app.evaluate(({ dialog }) => {
+    global.idleCloseCalls = 0;
+    dialog.showMessageBox = async () => { global.idleCloseCalls++; return { response: 0 }; };
+  });
+  await page.getByRole("button", { name: "关闭标签页", exact: true }).click();
+  await expect.poll(() => app.evaluate(() => global.idleCloseCalls)).toBe(1);
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+  await page.keyboard.press("Control+Shift+W");
+  await expect.poll(() => app.evaluate(() => global.idleCloseCalls)).toBe(2);
+  for (const id of ids) expect(await page.evaluate(id => window.terminalAPI.sessionInfo(id), id)).toHaveProperty("cwd");
+  await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
+  await page.keyboard.press("Control+Shift+W");
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
+  for (const id of ids) await expect.poll(() => page.evaluate(async id => {
+    try { await window.terminalAPI.sessionInfo(id); return false; } catch { return true; }
+  }, id)).toBe(true);
+});
+
 test("closing a split tab checks busy background panes once and releases every PTY", async () => {
   await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 60" : "sleep 60");
   await page.keyboard.press("Enter");
@@ -139,6 +168,23 @@ async function splitOutput(suffix) {
   await page.keyboard.press("Enter");
   await expect(page.locator(".terminal-pane.active .xterm-screen")).toContainText(`split-${suffix}`);
 }
+
+test("overflowing tabs stay outside the split toolbar", async () => {
+  for (let i = 2; i <= 15; i++) {
+    await page.getByRole("button", { name: "新建标签页", exact: true }).click();
+    await expect(page.getByRole("tab")).toHaveCount(i);
+  }
+  const boxes = await page.evaluate(() => {
+    const tabs = document.getElementById("tabs");
+    tabs.scrollLeft = 0;
+    const list = tabs.getBoundingClientRect();
+    const tools = document.getElementById("pane-tools").getBoundingClientRect();
+    return { tabsRight: list.right, toolsLeft: tools.left };
+  });
+  expect(boxes.tabsRight).toBeLessThanOrEqual(boxes.toolsLeft);
+  await page.getByRole("button", { name: "左右分屏", exact: true }).click();
+  await expect(page.locator(".terminal-pane:visible")).toHaveCount(2);
+});
 
 test("closing while a split session is being created cannot orphan its PTY", async () => {
   await app.evaluate(({ app }) => {
@@ -773,6 +819,62 @@ test("Escape cancels a reopened settings dialog after an earlier save", async ()
   await page.keyboard.press("Escape");
   await expect.poll(() => page.locator("body").evaluate(el => el.style.getPropertyValue("--terminal-bg"))).toBe("#223344");
   await expect(page.getByRole("tab")).toHaveCount(1);
+});
+
+test("IBus Shift toggles Chinese after submitting a tab rename", async () => {
+  test.skip(process.platform !== "linux" || process.env.TERMINAL_TEST_IBUS !== "1",
+    "Requires an X11 desktop with IBus libpinyin, Shift switching, and xdotool");
+  const { execFileSync } = require("node:child_process");
+  const x = (...args) => execFileSync("xdotool", args, { encoding: "utf8" }).trim();
+  expect(execFileSync("ibus", ["engine"], { encoding: "utf8" }).trim()).toBe("libpinyin");
+  const handle = await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0].getNativeWindowHandle().readUInt32LE(0));
+  x("windowactivate", "--sync", String(handle));
+  await page.evaluate(() => {
+    window.imeCommits = [];
+    document.addEventListener("compositionend", event => {
+      if (event.target.matches(".xterm-helper-textarea")) window.imeCommits.push(event.data);
+    });
+  });
+  async function togglePair() {
+    const modes = [];
+    for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => { window.imeCommits = []; });
+      x("key", "Shift_L");
+      x("type", "--delay", "80", "ni");
+      x("key", "space");
+      // Allow native IBus/Chromium composition messages to reach the renderer.
+      await page.waitForTimeout(150);
+      const commits = await page.evaluate(() => window.imeCommits);
+      modes.push(commits.some(text => /\p{Script=Han}/u.test(text)) ? "chinese" : "english");
+      x("key", "ctrl+u");
+    }
+    return modes.sort();
+  }
+  expect(await togglePair()).toEqual(["chinese", "english"]);
+  for (const submit of ["enter", "click"]) {
+    await page.getByRole("tab").dblclick();
+    await page.locator("#tab-name").fill(`IME ${submit}`);
+    // Playwright's keyboard injection bypasses the native IBus path.
+    if (submit === "enter") x("key", "Return");
+    else await page.locator('#rename button[value="save"]').click();
+    await expect(page.locator("#rename")).not.toBeVisible();
+    await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+    expect(await togglePair()).toEqual(["chinese", "english"]);
+  }
+});
+
+test("Enter saves the tab name and Cancel discards edits", async () => {
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("中文 terminal");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#rename")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveText("中文 terminal");
+  await page.keyboard.press("Control+Shift+R");
+  await page.locator("#tab-name").fill("discarded title");
+  await page.locator('#rename button[value="cancel"]').click();
+  await expect(page.locator("#rename")).not.toBeVisible();
+  await expect(page.getByRole("tab")).toHaveText("中文 terminal");
 });
 
 test("Escape cancels a reopened rename dialog without applying its input", async () => {

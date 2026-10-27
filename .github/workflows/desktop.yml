@@ -1,7 +1,7 @@
 name: Desktop native builds
 on:
   push:
-    branches: [main]
+    branches: [main, release/v0.3.0]
     paths: ['desktop/**', 'tests/proxy-cases.json', '.github/workflows/desktop.yml']
   pull_request:
     paths: ['desktop/**', 'tests/proxy-cases.json', '.github/workflows/desktop.yml']
@@ -15,7 +15,7 @@ permissions:
   contents: read
 concurrency:
   group: desktop-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/release/v0.3.0' }}
 jobs:
   desktop:
     strategy:
@@ -98,15 +98,17 @@ jobs:
   release:
     needs: desktop
     if: >-
-      github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
-       (github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')))
+      github.ref == 'refs/heads/release/v0.3.0' &&
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.message, '[republish-v0.3.0]')
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           pattern: terminal-*
@@ -128,41 +130,46 @@ jobs:
           done
           sha256sum terminal-* > SHA256SUMS
           sha256sum -c SHA256SUMS
-      - name: Upload installers and publish release
+      - name: Republish verified terminal 0.3.0 installers
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          EXPECTED_PREVIOUS_TAG: 3ea7b43a9eaab5cccc986169f535e84c5366a926
         run: |
           set -euo pipefail
           version=$(node -p "require('./desktop/package.json').version")
+          [[ "$version" == '0.3.0' && "$GITHUB_REF" == 'refs/heads/release/v0.3.0' ]]
           tag="v${version}"
-          existing_tag=$(gh api "repos/${GH_REPO}/git/matching-refs/tags/${tag}" --jq ".[] | select(.ref == \"refs/tags/${tag}\") | .ref")
-          if [[ -n "$existing_tag" ]]; then
-            tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
-            [[ "$tag_sha" == "$GITHUB_SHA" ]] || { echo 'Release tag points to different source' >&2; exit 1; }
-          fi
-          cat > release-notes.md <<'NOTES'
-          Windows / Linux 独立终端，包含标签页、外观设置、壁纸及真实本地 shell。
-
-          - 新增左右/上下嵌套分屏；每个面板运行独立 shell，新面板继承当前面板目录。
-          - 支持点击与快捷键切换面板、拖动或键盘调整分隔线，关闭面板后自动合并布局。
-          - 复制、粘贴与搜索作用于当前面板；延迟粘贴保留原面板归属，标签切换不会抢回焦点。
-          - 关闭标签页检查全部面板的运行状态，保留忙碌会话确认，并修复异步创建/关闭与焦点切换竞态。
-          - Ctrl+Shift+H 左右分屏，Ctrl+Shift+J 上下分屏，Ctrl+Shift+O 切换面板，Ctrl+Shift+X 关闭面板。
-          - Esc 优先取消弹窗、菜单和搜索，再关闭当前面板；最后一个标签页的最后一个面板关闭时退出。Esc 仍会拦截 Vim 等终端程序的同名按键。
-          - 保留已有外观与代理设置；分屏布局暂不跨启动保存。
-          - 四个平台均完成服务测试、界面测试和打包后回归测试。
-
-          下载与系统架构一致的文件：Windows 使用 setup.exe 或 zip；Debian / Ubuntu 使用 deb；Fedora / openSUSE 使用 rpm；其他 Linux 桌面可使用 AppImage。
-          安装步骤见仓库 README。安装包无需 Node.js 或 Python。Windows 安装包未签名；macOS 暂无安装包。
-          SHA256SUMS 提供安装包校验值。
-          NOTES
+          tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
+          [[ "$tag_sha" == "$EXPECTED_PREVIOUS_TAG" || "$tag_sha" == "$GITHUB_SHA" ]] || { echo 'Release tag changed unexpectedly' >&2; exit 1; }
+          git merge-base --is-ancestor "$tag_sha" "$GITHUB_SHA"
+          cp docs/releases/0.3.0.md release-notes.md
           printf '\n源码提交：%s\n构建记录：https://github.com/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-notes.md
-          if gh release view "$tag" --json isDraft,targetCommitish > existing-release.json 2>/dev/null; then
-            node -e "const r=require('./existing-release.json'); if (!r.isDraft || r.targetCommitish !== process.env.GITHUB_SHA) throw Error('Refusing to replace an existing release');"
-          else
-            gh release create "$tag" --target "$GITHUB_SHA" --draft --title "terminal ${version}" --notes-file release-notes.md
-          fi
+          # All four builds, packaged regressions and local checksums passed.
+          # Hide the release while replacing assets so a mixed set is not offered.
+          release_id=$(gh api "repos/${GH_REPO}/releases/tags/${tag}" --jq .id)
+          gh release edit "$tag" --draft=true
           gh release upload "$tag" release-assets/* --clobber
-          gh release edit "$tag" --draft=false --latest
+          gh api "repos/${GH_REPO}/releases/${release_id}" > uploaded-release.json
+          node <<'VERIFY'
+          const fs = require('node:fs'), crypto = require('node:crypto');
+          const sums = fs.readFileSync('release-assets/SHA256SUMS', 'utf8');
+          const expected = new Map(sums.trim().split('\n').map(line => {
+            const match = /^([a-f0-9]{64})  (.+)$/.exec(line);
+            if (!match) throw Error('Invalid checksum line');
+            return [match[2], 'sha256:' + match[1]];
+          }));
+          if (expected.size !== 10) throw Error('Expected ten installers');
+          expected.set('SHA256SUMS', 'sha256:' + crypto.createHash('sha256').update(sums).digest('hex'));
+          const assets = JSON.parse(fs.readFileSync('uploaded-release.json')).assets;
+          if (assets.length !== expected.size) throw Error('Unexpected release asset count');
+          for (const asset of assets) {
+            if (!expected.has(asset.name) || asset.size <= 0 || asset.state !== 'uploaded' || asset.digest !== expected.get(asset.name))
+              throw Error('Uploaded asset verification failed: ' + asset.name);
+          }
+          VERIFY
+          current_tag_sha=$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)
+          [[ "$current_tag_sha" == "$tag_sha" ]] || { echo 'Release tag changed during upload' >&2; exit 1; }
+          gh api --method PATCH "repos/${GH_REPO}/git/refs/tags/${tag}" -f sha="$GITHUB_SHA" -F force=false
+          gh release edit "$tag" --target "$GITHUB_SHA" --title 'terminal 0.3.0' --notes-file release-notes.md --draft=false --latest=false
