@@ -41,3 +41,7 @@
 测试脚本显式设置 `Console.InputEncoding` 和 `Console.OutputEncoding` 为 UTF-8，并为壁纸用例增加设置窗口关闭、终端焦点和 shell 空闲等待。Console 编码说明见 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/console/console-code-pages)。中文内容与对比度断言保留，退出清理超时继续如实记录。
 
 本地执行 `cd desktop && npm run test:e2e -- --grep 'text typed into ANSI-styled|light wallpaper panels' --repeat-each=3 --trace retain-on-failure`，6 项通过；Windows 脚本分支需由后续原生 CI 验证。
+
+[第三轮工作流](https://github.com/songyekun-614/terminal/actions/runs/40508808088)的 Windows x64 壁纸测试通过、退出清理未再超时；ANSI 用例经 `.NET Console.ReadLine` 读回的中文仍被替换为 `PP`，显式设置 UTF-8 不足以修正该测试路径。该轮 Linux 两个架构继续全部通过。
+
+最终将 ANSI 用例统一为一个真实 Node.js readline 子进程：从 shell 启动、输出四组 ANSI 配色、等待并读取终端输入、回传完整中文内容。两个系统使用相同的 CLI 读取器，避免以 `.NET Console` 的字符转换作为终端可读性测试前提。未降低对比度阈值、移除中文断言或跳过 Windows 用例；`.NET Console.ReadLine` 本身的兼容性不由此用例保证。本地相关两项各重复 3 次，共 6 项通过，最终结果以此修正后的 CI 为准。

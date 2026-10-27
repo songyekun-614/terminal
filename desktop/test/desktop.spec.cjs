@@ -4,6 +4,17 @@ const os = require("node:os");
 const fs = require("node:fs");
 let app, page, root;
 test("text typed into ANSI-styled CLI input stays readable on dark and light panels", async () => {
+  const reader = path.join(root, "ansi-input.cjs");
+  fs.writeFileSync(reader, `
+    const readline = require("node:readline");
+    process.stdout.write("\\x1b[2J\\x1b[H\\x1b[" + process.argv[2] + "m");
+    const input = readline.createInterface({ input: process.stdin, output: process.stdout });
+    input.question(process.argv[3], answer => {
+      process.stdout.write("\\x1b[0m\\nINPUT:" + answer + "\\n");
+      input.close();
+    });
+  `);
+  const quote = value => "'" + value.replaceAll("'", process.platform === "win32" ? "''" : "'\\''") + "'";
   const cases = [
     { profile: "Pro", sgr: "48;2;0;0;0;38;2;12;12;12" },
     { profile: "Homebrew", sgr: "40;30" },
@@ -18,9 +29,10 @@ test("text typed into ANSI-styled CLI input stays readable on dark and light pan
     await expect(page.locator('.terminal-pane.active .xterm-helper-textarea')).toBeFocused();
     await waitForIdleTerminal();
     const prompt = `CLI_${index}_ready> `;
-    const command = process.platform === "win32"
-      ? `[Console]::InputEncoding=[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); [Console]::Write([char]27+'[2J'+[char]27+'[H'+[char]27+'[${fixture.sgr}m'+'${prompt}'); $answer=[Console]::ReadLine(); [Console]::Write([char]27+'[0m'); [Console]::WriteLine(('INPUT:'+$answer))`
-      : `printf '\\033[2J\\033[H\\033[${fixture.sgr}m${prompt}'; IFS= read -r answer; printf '\\033[0m\\nINPUT:%s\\n' "$answer"`;
+    // Exercise a real child CLI with the same Unicode reader on both platforms,
+    // rather than coupling the terminal test to .NET Console code-page behavior.
+    const command = (process.platform === "win32" ? "& " : "") +
+      [process.execPath, reader, fixture.sgr, prompt].map(quote).join(" ");
     await page.keyboard.type(command);
     await page.keyboard.press("Enter");
     // Clear command echoes and wait for the actual reader prompt. Shell echo
