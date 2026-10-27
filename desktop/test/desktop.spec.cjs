@@ -823,8 +823,7 @@ test("Escape on a busy tab is left to the CLI without a close confirmation", asy
   expect(await app.evaluate(() => global.escapeConfirmations)).toBe(0);
   await expect(page.getByRole("tab")).toHaveCount(1);
   expect(page.isClosed()).toBe(false);
-  await page.keyboard.press("Control+C");
-  await waitForIdleTerminal();
+  // The shared afterEach closes the app and owns cleanup of this busy PTY.
 });
 
 test("closing a busy tab while confirmation is pending cannot close another tab", async () => {
