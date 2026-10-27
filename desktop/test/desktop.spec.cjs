@@ -136,7 +136,7 @@ test("tabs hide whole split layouts and restore the last focused pane", async ()
   await page.getByLabel("标签名称").fill("分屏工作");
   await page.getByRole("button", { name: "重命名", exact: true }).click();
   await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+Shift+X");
   await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
   await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
 });
@@ -784,29 +784,60 @@ async function waitForIdleTerminal() {
   }), { timeout: 15000 }).toBe(true);
 }
 
-test("Escape closes only the active tab and restores terminal focus", async () => {
+test("Escape keeps idle and busy split panes alive without close confirmation", async () => {
+  await page.keyboard.press("Control+Shift+T");
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+H");
+  await waitForIdleTerminal();
+  const panes = await page.locator(".terminal-pane").evaluateAll(nodes => nodes.map(node => node.id));
+  await app.evaluate(({ dialog }) => {
+    global.escapeCloseCalls = 0;
+    dialog.showMessageBox = async () => { global.escapeCloseCalls++; return { response: 1 }; };
+  });
+  // Cover shell prompts as well as a foreground CLI that owns its input.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+C");
+  await waitForIdleTerminal();
+  await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(async () =>
+    (await window.terminalAPI.sessionInfo(document.querySelector(".terminal-pane.active").id.slice(9))).busy)).toBe(true);
+  await page.keyboard.down("Escape");
+  await page.keyboard.down("Escape");
+  await page.keyboard.up("Escape");
+  // IPC round-trip observes the main process after the keyboard handlers ran.
+  expect(await app.evaluate(() => global.escapeCloseCalls)).toBe(0);
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  expect(await page.locator(".terminal-pane").evaluateAll(nodes => nodes.map(node => node.id))).toEqual(panes);
+  await page.keyboard.press("Control+C");
+  await waitForIdleTerminal();
+});
+
+test("a custom close-or-exit shortcut closes only the active tab and restores focus", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await expect(page.getByRole("tab")).toHaveCount(2);
   await waitForIdleTerminal();
   const activePane = await page.locator(".terminal-pane.active").getAttribute("id");
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
   await expect(page.locator(`[id="${activePane}"]`)).toHaveCount(0);
   await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
 
-test("Escape on the final idle tab honors cancellation before exiting", async () => {
+test("a custom close-or-exit shortcut on the final idle tab honors cancellation", async () => {
+  await configureCloseShortcut();
   await waitForIdleTerminal();
   await app.evaluate(({ dialog }) => {
     global.finalIdleCloseCalls = 0;
     dialog.showMessageBox = async () => { global.finalIdleCloseCalls++; return { response: 0 }; };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.finalIdleCloseCalls)).toBe(1);
   await expect(page.getByRole("tab")).toHaveCount(1);
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
   const closed = page.waitForEvent("close");
-  await page.keyboard.press("Escape").catch(error => {
+  await page.keyboard.press("F6").catch(error => {
     if (!page.isClosed()) throw error;
   });
   await closed;
@@ -922,17 +953,19 @@ test("Escape dismisses menu and about without closing the tab", async () => {
   await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
 
-test("held Escape does not close another tab", async () => {
+test("holding a custom close-or-exit shortcut does not close another tab", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await waitForIdleTerminal();
-  await page.keyboard.down("Escape");
+  await page.keyboard.down("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
-  await page.keyboard.down("Escape");
-  await page.keyboard.up("Escape");
+  await page.keyboard.down("F6");
+  await page.keyboard.up("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
 });
 
-test("Escape on the last busy tab honors cancellation and confirmation", async () => {
+test("a custom close-or-exit shortcut on the last busy tab honors confirmation", async () => {
+  await configureCloseShortcut();
   await waitForIdleTerminal();
   await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
   await page.keyboard.press("Enter");
@@ -944,19 +977,20 @@ test("Escape on the last busy tab honors cancellation and confirmation", async (
       return { response: 0 };
     };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
   await expect(page.getByRole("tab")).toHaveCount(1);
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
   const closed = page.waitForEvent("close");
-  await page.keyboard.press("Escape").catch(error => {
+  await page.keyboard.press("F6").catch(error => {
     if (!page.isClosed()) throw error;
   });
   await closed;
   expect(page.isClosed()).toBe(true);
 });
 
-test("Escape while a busy tab confirmation is pending cannot close another tab", async () => {
+test("a pending custom close confirmation cannot close another tab", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await waitForIdleTerminal();
   await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
@@ -968,9 +1002,9 @@ test("Escape while a busy tab confirmation is pending cannot close another tab",
       return new Promise(resolve => { global.resolveEscapeConfirmation = resolve; });
     };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   expect(await app.evaluate(() => global.escapeConfirmations)).toBe(1);
   await app.evaluate(() => global.resolveEscapeConfirmation({ response: 1 }));
   await expect(page.getByRole("tab")).toHaveCount(1);
@@ -986,6 +1020,13 @@ async function recordShortcut(label, chord) {
   await page.getByRole("button", { name: `${label}快捷键`, exact: true }).click();
   await page.keyboard.press(chord);
 }
+async function configureCloseShortcut() {
+  await openShortcuts();
+  await recordShortcut("关闭面板或退出", "F6");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+}
+
 
 test("custom shortcuts replace old bindings, persist on reload and update toolbar hints", async () => {
   await openShortcuts();
@@ -1035,11 +1076,30 @@ test("shortcut recording reports conflicts, supports clearing and cancelling wit
   await expect(page.locator("#shortcuts")).not.toBeVisible();
 });
 
-test("disabled terminal Escape reaches the real PTY while dialog Escape still cancels", async () => {
+test("legacy Escape bindings migrate on startup without losing custom shortcuts", async () => {
+  const file = path.join(root, "settings.json");
+  const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+  settings.shortcuts = { ...settings.shortcuts, escape_close: "Escape", new_tab: "Alt+Shift+N" };
+  fs.writeFileSync(file, JSON.stringify(settings));
+  await page.reload();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await waitForIdleTerminal();
+  const loaded = await page.evaluate(async () => (await window.terminalAPI.bootstrap()).settings.shortcuts);
+  expect(loaded.escape_close).toBe("");
+  await page.keyboard.press("Alt+Shift+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await waitForIdleTerminal();
   await openShortcuts();
-  await page.getByRole("button", { name: "清除关闭面板或退出快捷键", exact: true }).click();
+  await expect(page.getByRole("button", { name: "关闭面板或退出快捷键", exact: true })).toHaveText("未设置");
+  await page.getByRole("button", { name: "恢复默认", exact: true }).click();
   await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
   await expect(page.locator("#shortcuts")).not.toBeVisible();
+  expect(JSON.parse(fs.readFileSync(file, "utf8")).shortcuts.escape_close).toBe("");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+test("default Escape reaches the real PTY while dialog Escape still cancels", async () => {
   await app.evaluate(({ ipcMain }) => {
     global.escapeWrites = [];
     const handlers = ipcMain._invokeHandlers;

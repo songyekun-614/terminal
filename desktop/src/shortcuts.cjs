@@ -19,7 +19,7 @@ const commands = [
   ["zoom_reset", "重置字号", "显示与设置", "Ctrl+0"],
   ["settings", "外观设置", "显示与设置", "Ctrl+,"],
   ["shortcuts", "快捷键设置", "显示与设置", ""],
-  ["escape_close", "关闭面板或退出", "显示与设置", "Escape"],
+  ["escape_close", "关闭面板或退出", "显示与设置", ""],
 ].map(([id, label, group, binding]) => Object.freeze({ id, label, group, binding }));
 const defaults = Object.freeze(Object.fromEntries(commands.map(c => [c.id, c.binding])));
 const modifierNames = ["Ctrl", "Alt", "Shift", "Meta"];
@@ -51,7 +51,7 @@ function validateShortcuts(value) {
     let chord;
     try {
       chord = normalizeChord(value && Object.hasOwn(value, command.id) ? value[command.id] : command.binding);
-      if (chord.endsWith("Escape") && (command.id !== "escape_close" || chord !== "Escape")) throw Error("Esc 用于取消弹窗；仅关闭面板或退出可使用单独的 Esc");
+      if (chord.endsWith("Escape")) throw Error("Esc 保留给终端程序和弹窗取消，请选择其他快捷键");
     } catch (err) {
       err.action = command.id;
       err.message = `${command.label}：${err.message}`;
@@ -73,7 +73,13 @@ function validateShortcuts(value) {
   return result;
 }
 function normalizeShortcuts(value) {
-  try { return validateShortcuts(value); }
+  try {
+    // Older releases bound plain Escape to closing a pane/window. Migrate only
+    // that binding so CLI cancellation works without resetting custom shortcuts.
+    if (value && Object.hasOwn(value, "escape_close") && normalizeChord(value.escape_close) === "Escape")
+      value = { ...value, escape_close: "" };
+    return validateShortcuts(value);
+  }
   catch { return { ...defaults }; }
 }
 function shortcutFromEvent(event) {
