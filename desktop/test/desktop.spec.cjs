@@ -809,8 +809,7 @@ test("Escape keeps idle and busy split panes alive without close confirmation", 
   expect(await app.evaluate(() => global.escapeCloseCalls)).toBe(0);
   await expect(page.getByRole("tab")).toHaveCount(2);
   expect(await page.locator(".terminal-pane").evaluateAll(nodes => nodes.map(node => node.id))).toEqual(panes);
-  await page.keyboard.press("Control+C");
-  await waitForIdleTerminal();
+  // The shared afterEach closes the app and owns cleanup of this busy PTY.
 });
 
 test("a custom close-or-exit shortcut closes only the active tab and restores focus", async () => {
