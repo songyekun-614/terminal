@@ -13,6 +13,16 @@
   --pane-heading: #ffffff05;
   --pane-active-heading: #9eb7da12;
   --split-handle: #a3a7b180;
+  --field-bg: #1c2028;
+  --field-hover-bg: #242b37;
+  --field-focus-bg: #202938;
+  --field-text: #e9edf5;
+  --field-placeholder: #a2afc1;
+  --field-border: #66758a;
+  --field-hover-border: #869ab5;
+  --field-focus: #8db9ed;
+  --field-selection-bg: #aecbeb;
+  --field-selection-text: #142a42;
 }
 * {
   box-sizing: border-box;
@@ -395,12 +405,39 @@ main::before {
 }
 input,
 select {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--field-bg);
+  color: var(--field-text);
+  caret-color: var(--field-focus);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   padding: 8px;
   min-width: 0;
 }
+input::placeholder {
+  color: var(--field-placeholder);
+  opacity: 1;
+}
+input:hover:not(:focus-visible):not(:disabled),
+select:hover:not(:focus-visible):not(:disabled) {
+  background: var(--field-hover-bg);
+  border-color: var(--field-hover-border);
+}
+input:focus-visible,
+select:focus-visible {
+  background: var(--field-focus-bg);
+  border-color: var(--field-focus);
+  outline-color: var(--field-focus);
+}
+input::selection,
+textarea:not(.xterm-helper-textarea)::selection {
+  background: var(--field-selection-bg);
+  color: var(--field-selection-text);
+}
+select option {
+  background: var(--field-bg);
+  color: var(--field-text);
+}
+input[type="range"] { accent-color: var(--field-focus); }
 dialog {
   width: min(480px, 90vw);
   max-height: 90vh;
@@ -489,6 +526,28 @@ body.light {
   --pane-heading: #24252803;
   --pane-active-heading: #607c9f0b;
   --split-handle: #696c7480;
+  --field-bg: #ffffff;
+  --field-hover-bg: #f6f9fd;
+  --field-focus-bg: #ffffff;
+  --field-text: #252d3a;
+  --field-placeholder: #5d6b7c;
+  --field-border: #748397;
+  --field-hover-border: #627c9c;
+  --field-focus: #3e6fa4;
+  --field-selection-bg: #31577c;
+  --field-selection-text: #f6faff;
+}
+body[data-profile="Homebrew"] {
+  --field-bg: #14251c;
+  --field-hover-bg: #1d3024;
+  --field-focus-bg: #1c3025;
+  --field-text: #d8efdf;
+  --field-placeholder: #92b59e;
+  --field-border: #568267;
+  --field-hover-border: #7da58d;
+  --field-focus: #8cd7af;
+  --field-selection-bg: #b0dfc4;
+  --field-selection-text: #102b1d;
 }
 @keyframes appear {
   from {

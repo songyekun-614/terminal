@@ -3,6 +3,143 @@ const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
 let app, page, root;
+test("text typed into ANSI-styled CLI input stays readable on dark and light panels", async () => {
+  const reader = path.join(root, "ansi-input.cjs");
+  fs.writeFileSync(reader, `
+    const readline = require("node:readline");
+    process.stdout.write("\\x1b[2J\\x1b[H\\x1b[" + process.argv[2] + "m");
+    const input = readline.createInterface({ input: process.stdin, output: process.stdout });
+    input.question(process.argv[3], answer => {
+      process.stdout.write("\\x1b[0m\\nINPUT:" + answer + "\\n");
+      input.close();
+    });
+  `);
+  const quote = value => "'" + value.replaceAll("'", process.platform === "win32" ? "''" : "'\\''") + "'";
+  const cases = [
+    { profile: "Pro", sgr: "48;2;0;0;0;38;2;12;12;12" },
+    { profile: "Homebrew", sgr: "40;30" },
+    { profile: "Basic", sgr: "40;39" },
+    { profile: "Basic", sgr: "48;2;245;245;245;38;2;240;240;240" },
+  ];
+  for (const [index, fixture] of cases.entries()) {
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.locator('[name="profile"]').selectOption(fixture.profile);
+    await page.locator('#settings-form button[type="submit"]').click();
+    await expect(page.locator('#settings')).not.toBeVisible();
+    await expect(page.locator('.terminal-pane.active .xterm-helper-textarea')).toBeFocused();
+    await waitForIdleTerminal();
+    const prompt = `CLI_${index}_ready> `;
+    // Exercise a real child CLI with the same Unicode reader on both platforms,
+    // rather than coupling the terminal test to .NET Console code-page behavior.
+    const command = (process.platform === "win32" ? "& " : "") +
+      [process.execPath, reader, fixture.sgr, prompt].map(quote).join(" ");
+    await page.keyboard.type(command);
+    await page.keyboard.press("Enter");
+    // Clear command echoes and wait for the actual reader prompt. Shell echo
+    // and line wrapping vary by platform and must not determine readiness.
+    await expect.poll(() => page.locator('.xterm-rows').evaluate((el, text) =>
+      [...el.children].some(row => row.textContent.trimEnd() === text.trimEnd()), prompt)).toBe(true);
+    const typed = `cli_input_${index}`;
+    const submitted = `${typed}_你好`;
+    await page.keyboard.type(submitted);
+    const cell = page.locator('.xterm-rows span').filter({ hasText: typed }).last();
+    await expect(cell).toBeVisible();
+    function light(rgb) {
+      const v = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(c => c / 255)
+        .map(c => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return v[0] * 0.2126 + v[1] * 0.7152 + v[2] * 0.0722;
+    }
+    await expect.poll(async () => {
+      const colors = await cell.evaluate(el => {
+        if (!el.isConnected) return null;
+        const style = getComputedStyle(el);
+        return { foreground: style.color, background: style.backgroundColor };
+      });
+      // xterm replaces spans while processing the final Unicode input cells.
+      if (!colors?.foreground || !colors.background) return 0;
+      const fg = light(colors.foreground), bg = light(colors.background);
+      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+    }, { message: `${fixture.profile} ${fixture.sgr}: typed text` }).toBeGreaterThanOrEqual(4.5);
+    await page.keyboard.press("Enter");
+    await expect(page.locator('.xterm-screen')).toContainText(`INPUT:${submitted}`);
+    await waitForIdleTerminal();
+  }
+});
+
+test("light wallpaper panels keep normal shell text readable with contrast protection", async () => {
+  await app.evaluate(({ dialog }, source) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [source] });
+  }, path.join(__dirname, "../assets/icon.png"));
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.locator('[name="profile"]').selectOption("Basic");
+  await page.getByRole("button", { name: "导入壁纸", exact: true }).click();
+  await expect(page.locator("body")).toHaveClass(/has-wallpaper/);
+  await page.locator('[name="wallpaper_opacity"]').focus();
+  await page.keyboard.press("End");
+  await expect(page.locator('[name="wallpaper_opacity"]')).toHaveValue("1");
+  await page.locator('#settings-form button[type="submit"]').click();
+  await expect(page.locator('#settings')).not.toBeVisible();
+  await expect(page.locator('.terminal-pane.active .xterm-helper-textarea')).toBeFocused();
+  await waitForIdleTerminal();
+  await page.keyboard.type(process.platform === "win32"
+    ? "Write-Output ('wallpaper-' + 'readable')" : "printf '%s\\n' 'wallpaper-'readable");
+  await page.keyboard.press("Enter");
+  const cell = page.locator('.xterm-rows span').filter({ hasText: "wallpaper-readable" }).last();
+  await expect(cell).toBeVisible();
+  const ratio = await cell.evaluate(el => {
+    function light(values) {
+      const c = values.map(v => v / 255).map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+    }
+    const fg = light(getComputedStyle(el).color.match(/[\d.]+/g).slice(0, 3).map(Number));
+    const hex = getComputedStyle(document.body).getPropertyValue("--terminal-bg").trim();
+    const bg = light([1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)));
+    return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+  });
+  expect(ratio).toBeGreaterThanOrEqual(4.5);
+});
+
+test("form fields and copied text remain readable across profiles and background presets", async () => {
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  const profile = page.locator('[name="profile"]');
+  const background = page.locator('[name="background"]');
+  for (const name of ["Pro", "Basic", "Homebrew"]) {
+    await profile.selectOption(name);
+    for (const color of ["#17191e", "#121e32", "#13251c", "#2b211e", "#2d1b24", "#10282a", "#faf9f7", "#eceff3", "#e7f0fa", "#e8f2eb"]) {
+      await background.fill(color);
+      const metrics = await page.locator('#settings input:not([type="range"]), #settings select').evaluateAll(fields => {
+        function light(rgb) {
+          const values = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255)
+            .map(v => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+          return values[0] * 0.2126 + values[1] * 0.7152 + values[2] * 0.0722;
+        }
+        function contrast(a, b) { const first = light(a), second = light(b); return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05); }
+        return fields.map(field => {
+          const style = getComputedStyle(field), selection = getComputedStyle(field, "::selection");
+          let parent = field.parentElement, outside;
+          while (parent) {
+            const background = getComputedStyle(parent).backgroundColor;
+            if (!background.startsWith("rgba(") || !/[,/]\s*0\s*\)$/.test(background)) { outside = background; break; }
+            parent = parent.parentElement;
+          }
+          return { text: contrast(style.color, style.backgroundColor), border: contrast(style.borderTopColor, style.backgroundColor),
+            outsideBorder: contrast(style.borderTopColor, outside),
+            selection: field.tagName === "INPUT" ? contrast(selection.color, selection.backgroundColor) : null };
+        });
+      });
+      expect(metrics.length).toBeGreaterThan(3);
+      for (const field of metrics) {
+        expect(field.text, `${name} ${color}: input text`).toBeGreaterThanOrEqual(4.5);
+        expect(field.border, `${name} ${color}: input boundary`).toBeGreaterThanOrEqual(3);
+        expect(field.outsideBorder, `${name} ${color}: boundary against surrounding surface`).toBeGreaterThanOrEqual(3);
+        if (field.selection !== null) expect(field.selection, `${name} ${color}: copied text`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+  await page.locator("#settings-cancel").click();
+  await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
+});
+
 test("font choices preview, cancel and save while preserving custom font input", async () => {
   await page.getByRole("button", { name: "设置", exact: true }).click();
   const choice = page.getByRole("combobox", { name: "可选字体", exact: true });
@@ -136,7 +273,7 @@ test("tabs hide whole split layouts and restore the last focused pane", async ()
   await page.getByLabel("标签名称").fill("分屏工作");
   await page.getByRole("button", { name: "重命名", exact: true }).click();
   await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+Shift+X");
   await expect(page.locator(".terminal-pane:visible")).toHaveCount(1);
   await expect(page.getByRole("tab").first()).toHaveText("分屏工作");
 });
@@ -784,29 +921,59 @@ async function waitForIdleTerminal() {
   }), { timeout: 15000 }).toBe(true);
 }
 
-test("Escape closes only the active tab and restores terminal focus", async () => {
+test("Escape keeps idle and busy split panes alive without close confirmation", async () => {
+  await page.keyboard.press("Control+Shift+T");
+  await waitForIdleTerminal();
+  await page.keyboard.press("Control+Shift+H");
+  await waitForIdleTerminal();
+  const panes = await page.locator(".terminal-pane").evaluateAll(nodes => nodes.map(node => node.id));
+  await app.evaluate(({ dialog }) => {
+    global.escapeCloseCalls = 0;
+    dialog.showMessageBox = async () => { global.escapeCloseCalls++; return { response: 1 }; };
+  });
+  // Cover shell prompts as well as a foreground CLI that owns its input.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+C");
+  await waitForIdleTerminal();
+  await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(async () =>
+    (await window.terminalAPI.sessionInfo(document.querySelector(".terminal-pane.active").id.slice(9))).busy)).toBe(true);
+  await page.keyboard.down("Escape");
+  await page.keyboard.down("Escape");
+  await page.keyboard.up("Escape");
+  // IPC round-trip observes the main process after the keyboard handlers ran.
+  expect(await app.evaluate(() => global.escapeCloseCalls)).toBe(0);
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  expect(await page.locator(".terminal-pane").evaluateAll(nodes => nodes.map(node => node.id))).toEqual(panes);
+  // The shared afterEach closes the app and owns cleanup of this busy PTY.
+});
+
+test("a custom close-or-exit shortcut closes only the active tab and restores focus", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await expect(page.getByRole("tab")).toHaveCount(2);
   await waitForIdleTerminal();
   const activePane = await page.locator(".terminal-pane.active").getAttribute("id");
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
   await expect(page.locator(`[id="${activePane}"]`)).toHaveCount(0);
   await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
 
-test("Escape on the final idle tab honors cancellation before exiting", async () => {
+test("a custom close-or-exit shortcut on the final idle tab honors cancellation", async () => {
+  await configureCloseShortcut();
   await waitForIdleTerminal();
   await app.evaluate(({ dialog }) => {
     global.finalIdleCloseCalls = 0;
     dialog.showMessageBox = async () => { global.finalIdleCloseCalls++; return { response: 0 }; };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.finalIdleCloseCalls)).toBe(1);
   await expect(page.getByRole("tab")).toHaveCount(1);
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
   const closed = page.waitForEvent("close");
-  await page.keyboard.press("Escape").catch(error => {
+  await page.keyboard.press("F6").catch(error => {
     if (!page.isClosed()) throw error;
   });
   await closed;
@@ -922,17 +1089,19 @@ test("Escape dismisses menu and about without closing the tab", async () => {
   await expect(page.locator(".terminal-pane.active .xterm-helper-textarea")).toBeFocused();
 });
 
-test("held Escape does not close another tab", async () => {
+test("holding a custom close-or-exit shortcut does not close another tab", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await waitForIdleTerminal();
-  await page.keyboard.down("Escape");
+  await page.keyboard.down("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
-  await page.keyboard.down("Escape");
-  await page.keyboard.up("Escape");
+  await page.keyboard.down("F6");
+  await page.keyboard.up("F6");
   await expect(page.getByRole("tab")).toHaveCount(1);
 });
 
-test("Escape on the last busy tab honors cancellation and confirmation", async () => {
+test("a custom close-or-exit shortcut on the last busy tab honors confirmation", async () => {
+  await configureCloseShortcut();
   await waitForIdleTerminal();
   await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
   await page.keyboard.press("Enter");
@@ -944,19 +1113,20 @@ test("Escape on the last busy tab honors cancellation and confirmation", async (
       return { response: 0 };
     };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
   await expect(page.getByRole("tab")).toHaveCount(1);
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
   const closed = page.waitForEvent("close");
-  await page.keyboard.press("Escape").catch(error => {
+  await page.keyboard.press("F6").catch(error => {
     if (!page.isClosed()) throw error;
   });
   await closed;
   expect(page.isClosed()).toBe(true);
 });
 
-test("Escape while a busy tab confirmation is pending cannot close another tab", async () => {
+test("a pending custom close confirmation cannot close another tab", async () => {
+  await configureCloseShortcut();
   await page.getByRole("button", { name: "新建标签页", exact: true }).click();
   await waitForIdleTerminal();
   await page.keyboard.type(process.platform === "win32" ? "Start-Sleep -Seconds 120" : "sleep 120");
@@ -968,9 +1138,9 @@ test("Escape while a busy tab confirmation is pending cannot close another tab",
       return new Promise(resolve => { global.resolveEscapeConfirmation = resolve; });
     };
   });
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   await expect.poll(() => app.evaluate(() => global.escapeConfirmations)).toBe(1);
-  await page.keyboard.press("Escape");
+  await page.keyboard.press("F6");
   expect(await app.evaluate(() => global.escapeConfirmations)).toBe(1);
   await app.evaluate(() => global.resolveEscapeConfirmation({ response: 1 }));
   await expect(page.getByRole("tab")).toHaveCount(1);
@@ -986,6 +1156,13 @@ async function recordShortcut(label, chord) {
   await page.getByRole("button", { name: `${label}快捷键`, exact: true }).click();
   await page.keyboard.press(chord);
 }
+async function configureCloseShortcut() {
+  await openShortcuts();
+  await recordShortcut("关闭面板或退出", "F6");
+  await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
+  await expect(page.locator("#shortcuts")).not.toBeVisible();
+}
+
 
 test("custom shortcuts replace old bindings, persist on reload and update toolbar hints", async () => {
   await openShortcuts();
@@ -1035,11 +1212,30 @@ test("shortcut recording reports conflicts, supports clearing and cancelling wit
   await expect(page.locator("#shortcuts")).not.toBeVisible();
 });
 
-test("disabled terminal Escape reaches the real PTY while dialog Escape still cancels", async () => {
+test("legacy Escape bindings migrate on startup without losing custom shortcuts", async () => {
+  const file = path.join(root, "settings.json");
+  const settings = JSON.parse(fs.readFileSync(file, "utf8"));
+  settings.shortcuts = { ...settings.shortcuts, escape_close: "Escape", new_tab: "Alt+Shift+N" };
+  fs.writeFileSync(file, JSON.stringify(settings));
+  await page.reload();
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await waitForIdleTerminal();
+  const loaded = await page.evaluate(async () => (await window.terminalAPI.bootstrap()).settings.shortcuts);
+  expect(loaded.escape_close).toBe("");
+  await page.keyboard.press("Alt+Shift+N");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+  await waitForIdleTerminal();
   await openShortcuts();
-  await page.getByRole("button", { name: "清除关闭面板或退出快捷键", exact: true }).click();
+  await expect(page.getByRole("button", { name: "关闭面板或退出快捷键", exact: true })).toHaveText("未设置");
+  await page.getByRole("button", { name: "恢复默认", exact: true }).click();
   await page.getByRole("button", { name: "保存快捷键", exact: true }).click();
   await expect(page.locator("#shortcuts")).not.toBeVisible();
+  expect(JSON.parse(fs.readFileSync(file, "utf8")).shortcuts.escape_close).toBe("");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tab")).toHaveCount(2);
+});
+
+test("default Escape reaches the real PTY while dialog Escape still cancels", async () => {
   await app.evaluate(({ ipcMain }) => {
     global.escapeWrites = [];
     const handlers = ipcMain._invokeHandlers;

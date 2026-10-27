@@ -45,6 +45,41 @@ test("validation rejects typing, clipboard and system conflicts and aliases", ()
 function key(key, modifiers = {}) {
   return { key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...modifiers };
 }
+test("default and reset shortcuts leave Escape available to CLI applications", () => {
+  for (const shortcuts of [defaults, validateShortcuts(), normalizeShortcuts(null)]) {
+    assert.equal(actionForEvent(key("Escape"), shortcuts), null);
+    assert.equal(actionForEvent(key("W", { ctrlKey: true, shiftKey: true }), shortcuts), "close_tab");
+    assert.equal(actionForEvent(key("X", { ctrlKey: true, shiftKey: true }), shortcuts), "close_pane");
+  }
+});
+
+test("loading legacy Escape settings releases Escape without losing other preferences", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "terminal-escape-migration-"));
+  try {
+    for (const binding of ["Escape", "esc", " escape "]) {
+      fs.writeFileSync(path.join(root, "settings.json"), JSON.stringify({
+        font_size: 19,
+        shell: "bash",
+        shortcuts: { new_tab: "Alt+Shift+N", escape_close: binding },
+      }));
+      const loaded = readSettings(root);
+      assert.equal(actionForEvent(key("Escape"), loaded.shortcuts), null);
+      assert.equal(actionForEvent(key("N", { altKey: true, shiftKey: true }), loaded.shortcuts), "new_tab");
+      assert.equal(loaded.font_size, 19);
+      assert.equal(loaded.shell, "bash");
+      saveSettings(root, loaded);
+      assert.equal(readSettings(root).shortcuts.escape_close, "");
+    }
+    assert.equal(normalizeShortcuts({ escape_close: "F6" }).escape_close, "F6");
+    assert.equal(actionForEvent(key("F6"), normalizeShortcuts({ escape_close: "F6" })), "escape_close");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("saving shortcuts cannot reassign Escape away from CLI applications", () => {
+  assert.throws(() => validateShortcuts({ escape_close: "Escape" }), /Esc/);
+  assert.throws(() => validateShortcuts({ close_tab: "Escape" }), /Esc/);
+});
+
 test("event matching is exact, ignores composition and AltGraph, and releases old bindings", () => {
   const custom = validateShortcuts({ new_tab: "Alt+Shift+N", escape_close: "" });
   assert.equal(actionForEvent(key("N", { altKey: true, shiftKey: true }), custom), "new_tab");
